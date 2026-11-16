@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 const BASE_CSS = `@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}`;
 
@@ -176,21 +177,21 @@ function Home() {
       <header className="fixed top-0 w-full z-50 bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.4)]">
         <div className="h-16 max-w-7xl mx-auto px-margin-desktop flex items-center justify-between">
           <div className="flex items-center gap-space-lg">
-            <a className="flex items-center gap-space-sm text-on-surface" data-path="home" href="#">
+            <Link className="flex items-center gap-space-sm text-on-surface" data-path="home" to="/">
               <div className="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center text-primary-container">
                 <span className="material-symbols-outlined text-[20px]">mic</span>
               </div>
               <span className="font-headline-sm text-headline-sm tracking-tight text-on-surface uppercase">PodSphere</span>
-            </a>
+            </Link>
             <nav className="hidden md:flex items-center gap-space-md ml-space-md" data-active-classes="text-on-surface">
-              <a className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="browse-studios" href="#">Browse Studios</a>
-              <a className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="how-it-works" href="#">How It Works</a>
-              <a className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="for-providers" href="#">For Providers</a>
+              <Link className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="browse-studios" to="/creator/bookings">Browse Studios</Link>
+              <a className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="how-it-works" href="#how-it-works">How It Works</a>
+              <Link className="font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors px-space-sm py-space-xs" data-path="for-providers" to="/provider/dashboard">For Providers</Link>
             </nav>
           </div>
           <div className="flex items-center gap-space-sm">
-            <a className="h-9 px-space-md flex items-center justify-center font-body-sm text-body-sm text-on-surface bg-surface-container hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-colors" data-path="login" href="#">Log In</a>
-            <a className="h-9 px-space-md flex items-center justify-center font-body-sm text-body-sm bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-lg font-medium transition-colors" data-path="register" href="#">Register</a>
+            <Link className="h-9 px-space-md flex items-center justify-center font-body-sm text-body-sm text-on-surface bg-surface-container hover:bg-surface-container-high hover:text-on-surface rounded-lg transition-colors" data-path="login" to="/login">Log In</Link>
+            <Link className="h-9 px-space-md flex items-center justify-center font-body-sm text-body-sm bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-lg font-medium transition-colors" data-path="register" to="/register">Register</Link>
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs">
               <span className="material-symbols-outlined text-on-primary text-[18px]">person</span>
             </div>
@@ -220,12 +221,12 @@ function Home() {
                     PodSphere connects podcast creators with recording studios so you can discover a space, compare rates and book your session.
                   </p>
                   <div className="flex flex-wrap items-center gap-space-md pt-space-sm w-full sm:w-auto">
-                    <a className="h-[42px] px-space-lg flex items-center justify-center bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-xl font-body-md text-body-md font-medium transition-colors shadow-sm" data-path="browse-studios" href="#">
+                    <Link className="h-[42px] px-space-lg flex items-center justify-center bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-xl font-body-md text-body-md font-medium transition-colors shadow-sm" data-path="browse-studios" to="/creator/bookings">
                       Browse Studios
-                    </a>
-                    <a className="h-[42px] px-space-lg flex items-center justify-center bg-surface-container-high text-on-surface hover:bg-surface-variant rounded-xl font-body-md text-body-md font-medium transition-colors shadow-sm" data-path="for-providers" href="#">
+                    </Link>
+                    <Link className="h-[42px] px-space-lg flex items-center justify-center bg-surface-container-high text-on-surface hover:bg-surface-variant rounded-xl font-body-md text-body-md font-medium transition-colors shadow-sm" data-path="for-providers" to="/provider/dashboard">
                       List Your Studio
-                    </a>
+                    </Link>
                   </div>
 
                   <div className="pt-space-lg grid grid-cols-3 gap-gutter w-full max-w-lg">
@@ -301,9 +302,9 @@ function Home() {
                         </div>
                       </div>
 
-                      <a className="w-full h-10 flex items-center justify-center bg-surface-container-highest hover:bg-surface-variant text-on-surface rounded-xl font-body-sm text-body-sm font-medium transition-colors" data-path="studio-detail-echo" href="#">
+                      <Link className="w-full h-10 flex items-center justify-center bg-surface-container-highest hover:bg-surface-variant text-on-surface rounded-xl font-body-sm text-body-sm font-medium transition-colors" data-path="studio-detail-echo" to="/creator/bookings">
                         View Studio
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -312,7 +313,7 @@ function Home() {
           </section>
 
 
-          <section className="w-full py-space-xl bg-surface">
+          <section id="how-it-works" className="w-full py-space-xl bg-surface">
             <div className="max-w-7xl mx-auto px-margin-desktop">
 
               <div className="flex flex-col md:flex-row md:items-end justify-between mb-space-xl gap-space-md">
@@ -522,7 +523,7 @@ function Home() {
           </section>
 
 
-          <section className="w-full py-space-xl bg-surface">
+          <section id="for-providers" className="w-full py-space-xl bg-surface">
             <div className="max-w-7xl mx-auto px-margin-desktop">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-gutter-desktop items-center">
 
@@ -629,9 +630,9 @@ function Home() {
               <h2 className="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight max-w-2xl mb-space-lg">
                 Ready to find a recording space?
               </h2>
-              <a className="h-[42px] px-space-xl flex items-center justify-center bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-xl font-body-md text-body-md font-medium transition-colors shadow-md" data-path="browse-studios" href="#">
+              <Link className="h-[42px] px-space-xl flex items-center justify-center bg-primary-container text-on-primary-container hover:bg-secondary-container hover:text-on-secondary-container rounded-xl font-body-md text-body-md font-medium transition-colors shadow-md" data-path="browse-studios" to="/creator/bookings">
                 Browse Studios
-              </a>
+              </Link>
               <div className="mt-space-lg flex items-center gap-space-lg font-label-sm text-label-sm text-on-surface-variant">
                 <span>VERIFIED ACOUSTIC ISOLATION</span>
                 <span className="text-outline-variant">/</span>
