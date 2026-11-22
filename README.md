@@ -47,7 +47,7 @@ For most aspiring creators, finding and booking a local podcast studio is challe
 
 ### PodSphere solves this by connecting creators and studio providers directly.
 
-Creators can discover vetted studios and reserve recording slots in minutes, while studio providers get a dedicated workspace to manage listings and incoming bookings.
+Creators can discover listed studios and reserve recording slots, while studio providers get a dedicated workspace to manage listings and incoming bookings.
 
 ---
 
@@ -55,7 +55,9 @@ Creators can discover vetted studios and reserve recording slots in minutes, whi
 
 > **PodSphere** is a platform that connects podcast creators with recording studios. Creators can discover studios and book recording slots, while studio providers can list and manage their studios and handle incoming bookings.
 
-Developed as a **Semester 3 college project**, PodSphere focuses on building a functional, intuitive full-stack web application with clean separation between creator and provider workflows.
+Developed as a **Semester 3 college project**, PodSphere focuses on building a functional, intuitive full-stack web application with clean separation between Creator and Provider workflows.
+
+> **Project Status Notice:** The frontend user interface is fully interactive and functional in standalone client mode using local storage. The backend REST APIs, JWT middleware, and PostgreSQL database integration are currently under active development.
 
 ---
 
@@ -95,16 +97,16 @@ Creators looking for recording spaces and studio owners managing facilities face
 
 ### 🎙️ Creator Workspace
 
-Everything a podcast creator needs to find and book a studio:
+Features available to podcast creators:
 
-* **Authentication & Profiles:** Secure registration, login, and profile persistence.
-* **Creator Dashboard:** Summary of upcoming recording sessions and quick navigation.
-* **Studio Discovery:** Search studios by name, city, price range, and available gear.
-* **Studio Details Modal:** Detailed views showing capacity, hourly rates, addresses, and gear lists (e.g., 4K Cameras, Soundproofing, Rode PodMics).
-* **Booking System:** Select dates and hourly time slots with automated conflict detection.
-* **Personal Bookings:** View booking history with status filters (*Pending*, *Confirmed*, *Cancelled*, *Completed*).
-* **Booking Cancellation:** Cancel upcoming eligible reservations with confirmation safeguards.
-* **Workspace Switcher:** Seamlessly switch to provider tools with the same account.
+* **Authentication & Profiles:** Registration and login interfaces with client-side session persistence.
+* **Creator Dashboard:** Overview of upcoming sessions and quick navigation links.
+* **Studio Discovery:** Search studios by name, city, price range, and equipment tags.
+* **Studio Details Modal:** Modal showing capacity, hourly rates, location, and equipment lists.
+* **Booking Creation:** Interactive date selection and hourly time-slot picker with client-side availability checks.
+* **Personal Bookings:** Booking history view with filter tabs (*Pending*, *Confirmed*, *Cancelled*, *Completed*).
+* **Booking Cancellation:** Ability to cancel upcoming reservations with confirmation safeguards.
+* **Workspace Switcher:** Instant switching between Creator and Provider views from the same session.
 
 </td>
 
@@ -112,17 +114,17 @@ Everything a podcast creator needs to find and book a studio:
 
 ### 🏢 Provider Workspace
 
-Tools for studio owners to manage their spaces and clients:
+Tools for studio providers to manage facilities and bookings:
 
-* **Provider Dashboard:** Overview of total studios listed, active booking requests, and studio status.
-* **Provider Onboarding:** Self-service activation allowing creators to unlock provider tools without creating a separate account.
+* **Provider Dashboard:** Overview of listed studios, active requests, and studio status cards.
+* **Provider Onboarding:** In-app access activation allowing creators to access provider tools without creating a separate account.
 * **Studio Management (CRUD):**
-  * Create new studio listings with pricing, address, amenities, and equipment tags.
-  * Edit existing studio details and update gear specs.
+  * Create new studio listings with pricing, address, description, and gear tags.
+  * Edit existing studio details and update specifications.
   * Delete listings with confirmation safety dialogs.
-* **Incoming Booking Management:** Review requests with creator details, dates, and times.
-* **Status Controls:** Confirm, reject, or mark completed sessions as bookings progress.
-* **Schedule Oversight:** Prevent conflicting requests on provider facilities.
+* **Incoming Booking Management:** Review requests with creator names, dates, and time slots.
+* **Status Controls:** Actions to confirm, reject, or mark sessions completed in the UI.
+* **Schedule Oversight:** Visual indicators of confirmed and pending studio sessions.
 
 </td>
 </tr>
@@ -147,8 +149,8 @@ Tools for studio owners to manage their spaces and clients:
   [ Select Date & Time Slot ]
           │
           ▼
-  [ Automated Conflict Check Passed? ] ──▶ (No) ──▶ [ Select Different Slot ]
-          │ (Yes)
+  [ Client-Side Slot Availability Check ] ──▶ (Conflict) ──▶ [ Select Different Slot ]
+          │ (Available)
           ▼
   [ Booking Created (Pending / Confirmed) ]
           │
@@ -179,21 +181,21 @@ Tools for studio owners to manage their spaces and clients:
 
 ## ⚙️ Business Logic & Edge Cases
 
-PodSphere addresses key real-world scheduling and permission scenarios:
-
 ### 📅 Booking Conflict Detection
 
-Before any booking is saved, the system verifies that the requested studio is not already reserved during the chosen time window:
+To prevent double-booking a studio for the same time window:
+* **Frontend (Implemented):** In standalone demo mode, client-side validation checks existing local bookings for the selected studio and blocks duplicate reservations for identical dates and time slots.
+* **Backend (In Progress):** Server-side transaction validation to enforce concurrency checks against the PostgreSQL database is currently under development.
 
 ```text
 Creator selects studio, date & time slot
                    │
                    ▼
-  Query existing bookings for studio
+  Check existing bookings for studio
                    │
                    ▼
        ┌───────────────────────┐
-       │ Conflict Detected?    │
+       │   Slot Overlapping?   │
        └───────────┬───────────┘
                    │
          ┌─────────┴─────────┐
@@ -201,7 +203,7 @@ Creator selects studio, date & time slot
        [ YES ]             [ NO ]
          │                   │
          ▼                   ▼
-  Display conflict    Create booking
+  Display conflict    Register booking
   error to creator    and update schedule
 ```
 
@@ -225,20 +227,23 @@ Creator selects studio, date & time slot
 └───────────┘ └─────────────┘
 ```
 
-### 🛡️ Edge Cases Handled
+> **Note on Booking Statuses:** The frontend demo interface implements all five status states (*Pending*, *Confirmed*, *Rejected*, *Cancelled*, *Completed*). The existing database schema enum currently defines three states (`CONFIRMED`, `CANCELLED`, `COMPLETED`); extending the schema to include `PENDING` and `REJECTED` is part of the ongoing backend development.
 
-* [x] **Slot Overlap Prevention:** Prevents double-booking the same studio at overlapping hours.
-* [x] **Role-Based Routing:** Unauthenticated users cannot access creator or provider pages.
-* [x] **Workspace Navigation:** Users can toggle between Creator and Provider views without logging out.
-* [x] **Provider Access Activation:** Creators can activate provider permissions directly from the interface.
-* [x] **Deletion Safeguards:** Modals require explicit confirmation before deleting studios or cancelling bookings.
-* [x] **Scroll & Viewport Integrity:** Modals and long data tables maintain responsive scrolling across small displays.
+### 🛡️ Edge Cases & Implementation Status
+
+* [x] **Client Route Protection:** Unauthenticated users are redirected from creator and provider routes on the frontend.
+* [x] **Workspace Navigation:** Single-account workspace switcher toggling between Creator and Provider views.
+* [x] **Client-Side Provider Activation:** Creators can activate provider tools directly in the UI without a separate registration.
+* [x] **Action Safeguards:** Confirmation modal dialogs prevent accidental deletion of studio listings or cancellation of bookings.
+* [x] **Responsive Viewport & Scrolling:** Accessible custom scrollbars and modal containers preventing content clipping on small screens.
+* [ ] **Backend Conflict Enforcement (In Progress):** Database-level transaction checks to prevent concurrent duplicate bookings on the server.
+* [ ] **Backend Authorization Middleware (In Progress):** Server-side JWT token and role validation on Express API endpoints.
 
 ---
 
 ## 🏗️ Architecture
 
-PodSphere follows a modular full-stack architecture with clear separation of concerns:
+PodSphere follows a modular full-stack architecture:
 
 ```text
                        ┌─────────────────────────┐
@@ -249,6 +254,7 @@ PodSphere follows a modular full-stack architecture with clear separation of con
                        ┌─────────────────────────┐
                        │     React Frontend      │
                        │   (Vite + Tailwind CSS) │
+                       │       [IMPLEMENTED]     │
                        │                         │
                        │  • Creator Dashboard    │
                        │  • Studio Browser       │
@@ -264,6 +270,7 @@ PodSphere follows a modular full-stack architecture with clear separation of con
                        ┌─────────────────────────┐
                        │     Express Backend     │
                        │       (Node.js)         │
+                       │     [IN PROGRESS]       │
                        │                         │
                        │  • Auth & JWT Routes    │
                        │  • Studio Controllers   │
@@ -276,22 +283,27 @@ PodSphere follows a modular full-stack architecture with clear separation of con
                                     ▼
                        ┌─────────────────────────┐
                        │   PostgreSQL Database   │
-                       │  (Users, Studios,       │
-                       │   Bookings)             │
+                       │     [SCHEMA READY]      │
+                       │                         │
+                       │  • Users Table          │
+                       │  • Studios Table        │
+                       │  • Bookings Table       │
                        └─────────────────────────┘
 ```
 
-### Dual-Mode Frontend Architecture
+### Frontend vs Backend Status
 
-To ensure the user interface is testable even without an active PostgreSQL instance running:
-* **Standalone Mode (`VITE_USE_API=false`):** Uses browser local storage with pre-seeded studios and bookings, allowing full UI exploration and testing.
-* **API Mode (`VITE_USE_API=true`):** Communicates with the Express backend REST endpoints.
+* **Frontend (Implemented):** Built with React 19, Vite, React Router 7, and Tailwind CSS. All creator and provider views, modals, filters, and forms are fully interactive.
+* **Backend (In Progress):** The Express structure in `backend/src/` contains initial scaffolding (route stubs, controller skeletons, middleware stubs, and utility helpers). The business logic and database-connected endpoints are currently being developed.
+* **Dual-Mode Client:**
+  * **Standalone Mode (`VITE_USE_API=false`):** Runs the frontend using browser local storage and pre-seeded mock studio/booking data. This allows complete UI testing without needing a running backend server or PostgreSQL database.
+  * **API Mode (`VITE_USE_API=true`):** Configured to dispatch HTTP requests to the Express backend endpoints once backend implementation is completed.
 
 ---
 
 ## 🗄️ Database Architecture
 
-The database schema is defined using **Prisma ORM** targeting **PostgreSQL**.
+The database schema is defined in [schema.prisma](backend/prisma/schema.prisma) targeting **PostgreSQL**.
 
 ```text
        ┌──────────────────┐
@@ -301,7 +313,7 @@ The database schema is defined using **Prisma ORM** targeting **PostgreSQL**.
        │ name             │
        │ email (Unique)   │
        │ passwordHash     │
-       │ role (Enum)      │
+       │ role (Role)      │
        └────────┬─────────┘
                 │
         1:N     │        1:N
@@ -316,7 +328,7 @@ The database schema is defined using **Prisma ORM** targeting **PostgreSQL**.
 │ description      │   │ startTime        │
 │ city             │   │ endTime          │
 │ address          │   │ totalAmount      │
-│ hourlyRate       │   │ status (Enum)    │
+│ hourlyRate       │   │ status (Status)  │
 │ gear (String[])  │   └──────────────────┘
 └──────────────────┘
 ```
@@ -325,14 +337,19 @@ The database schema is defined using **Prisma ORM** targeting **PostgreSQL**.
 
 | Model | Fields | Purpose |
 | :--- | :--- | :--- |
-| `User` | `id`, `name`, `email`, `passwordHash`, `role`, `createdAt`, `updatedAt` | Stores user credentials and primary role (`USER` or `PROVIDER`). |
-| `Studio` | `id`, `providerId`, `name`, `description`, `city`, `address`, `hourlyRate`, `gear`, `createdAt`, `updatedAt` | Represents recording studios listed by providers, including hourly rates and gear tags. |
-| `Booking` | `id`, `creatorId`, `studioId`, `startTime`, `endTime`, `totalAmount`, `status`, `createdAt`, `updatedAt` | Stores reservations linking creators and studios with date ranges and statuses. |
+| `User` | `id`, `name`, `email`, `passwordHash`, `role`, `createdAt`, `updatedAt` | Stores user account credentials and primary database role. |
+| `Studio` | `id`, `providerId`, `name`, `description`, `city`, `address`, `hourlyRate`, `gear`, `createdAt`, `updatedAt` | Represents recording studios listed by providers, including hourly rates and equipment. |
+| `Booking` | `id`, `creatorId`, `studioId`, `startTime`, `endTime`, `totalAmount`, `status`, `createdAt`, `updatedAt` | Stores studio reservations linking creators and studios with date ranges. |
 
 ### Schema Enums
 
 * `Role`: `USER`, `PROVIDER`
-* `BookingStatus`: `CONFIRMED`, `CANCELLED`, `COMPLETED` *(Frontend also supports `PENDING` and `REJECTED` workflows)*
+* `BookingStatus`: `CONFIRMED`, `CANCELLED`, `COMPLETED`
+
+### Database Role vs Frontend Workspace
+
+* **Database Role:** In PostgreSQL, each user is stored with a single `Role` enum value (`USER` or `PROVIDER`).
+* **Active Frontend Workspace:** In the React UI, an authenticated user has an `activeWorkspace` state (`"creator"` or `"provider"`). This allows any account to explore both creator and provider views in the frontend. When the backend integration is completed, backend role authorization will validate whether the user has permission to perform provider mutations.
 
 ---
 
@@ -372,18 +389,18 @@ PodSphere/
 │   │   └── schema.prisma           # Prisma PostgreSQL schema
 │   ├── src/
 │   │   ├── config/                 # Environment configurations
-│   │   ├── controllers/            # Route controllers (auth, booking, studio)
-│   │   ├── middleware/             # Auth, error handling, rate limiting
+│   │   ├── controllers/            # Controller skeletons (in progress)
+│   │   ├── middleware/             # Middleware stubs (in progress)
 │   │   ├── prisma/                 # Prisma database client instance
-│   │   ├── routes/                 # Express REST route definitions
-│   │   ├── services/               # Database query and business logic layer
-│   │   ├── utils/                  # Async handlers, JWT, and time helpers
-│   │   ├── validators/             # Request payload validation schemas
-│   │   ├── app.js                  # Express application setup
-│   │   └── server.js               # Server entry point
+│   │   ├── routes/                 # Route stubs (in progress)
+│   │   ├── services/               # Service skeletons (in progress)
+│   │   ├── utils/                  # Utility helpers
+│   │   ├── validators/             # Validation skeletons (in progress)
+│   │   ├── app.js                  # Express app definition
+│   │   └── server.js               # Express server entry point
 │   ├── .env.example                # Backend environment template
 │   ├── package.json
-│   └── prisma7.config.ts           # Prisma CLI configuration
+│   └── prisma7.config.ts           # Prisma configuration
 │
 ├── frontend/
 │   ├── public/
@@ -392,37 +409,37 @@ PodSphere/
 │   ├── src/
 │   │   ├── assets/                 # App assets and icons
 │   │   ├── context/
-│   │   │   ├── AuthContext.jsx     # Workspace, role, and auth state
+│   │   │   ├── AuthContext.jsx     # Workspace state and authentication
 │   │   │   └── authContextInstance.js
 │   │   ├── hooks/
-│   │   │   └── useAuth.js          # Authentication hook
+│   │   │   └── useAuth.js          # Auth consumer hook
 │   │   ├── layouts/
-│   │   │   └── DashboardLayout.jsx # Sidebar, breadcrumbs & workspace switcher
+│   │   │   └── DashboardLayout.jsx # Shell layout with workspace switcher
 │   │   ├── pages/
 │   │   │   ├── creator/
-│   │   │   │   ├── BrowseStudios.jsx   # Studio discovery & booking modal
-│   │   │   │   ├── CreatorBookings.jsx # Personal bookings & cancellations
-│   │   │   │   └── CreatorDashboard.jsx# Creator metrics & quick links
+│   │   │   │   ├── BrowseStudios.jsx   # Studio discovery and booking modal
+│   │   │   │   ├── CreatorBookings.jsx # Booking history and cancellations
+│   │   │   │   └── CreatorDashboard.jsx# Creator metrics and shortcuts
 │   │   │   ├── provider/
-│   │   │   │   ├── CreateEditStudio.jsx# Studio creation & editing form
-│   │   │   │   ├── ProviderBookings.jsx# Incoming requests & status controls
-│   │   │   │   ├── ProviderDashboard.jsx# Host metrics & requests summary
-│   │   │   │   └── ProviderStudios.jsx # Studio inventory & deletion modal
+│   │   │   │   ├── CreateEditStudio.jsx# Studio create/edit form
+│   │   │   │   ├── ProviderBookings.jsx# Incoming booking status controls
+│   │   │   │   ├── ProviderDashboard.jsx# Provider metrics and summaries
+│   │   │   │   └── ProviderStudios.jsx # Studio list and delete modal
 │   │   │   └── public/
 │   │   │       ├── Home.jsx        # Landing page
 │   │   │       ├── Login.jsx       # Login form
 │   │   │       └── Register.jsx    # Registration form
 │   │   ├── routes/
 │   │   │   ├── AppRoutes.jsx       # Route declarations
-│   │   │   └── ProtectedRoute.jsx  # Route protection & provider activation
+│   │   │   └── ProtectedRoute.jsx  # Client route protection
 │   │   ├── services/
 │   │   │   ├── api.js              # Fetch client wrapper
-│   │   │   ├── authApi.js          # Auth requests with standalone fallback
-│   │   │   ├── bookingApi.js       # Booking operations & conflict logic
+│   │   │   ├── authApi.js          # Auth client with standalone fallback
+│   │   │   ├── bookingApi.js       # Booking operations and demo conflict logic
 │   │   │   └── studioApi.js        # Studio CRUD operations
 │   │   ├── App.jsx
-│   │   ├── index.css               # Global styles & custom scrollbars
-│   │   └── main.jsx                # Application root mount
+│   │   ├── index.css               # Global styles and custom scrollbars
+│   │   └── main.jsx                # React root mount
 │   ├── .env.example                # Frontend environment template
 │   ├── index.html
 │   ├── package.json
@@ -461,8 +478,8 @@ VITE_API_URL=http://localhost:5000/api
 VITE_USE_API=false
 ```
 
-> **Note on Standalone Mode:**
-> When `VITE_USE_API=false`, the frontend runs in standalone mode using browser storage and built-in mock studios. This allows full UI testing without needing a running backend or database. Set `VITE_USE_API=true` when connecting to the Express server.
+> **Standalone Frontend Mode:**
+> When `VITE_USE_API=false`, the frontend runs in standalone mode using browser storage and built-in mock studio/booking data. This allows complete UI testing without needing a running backend server or PostgreSQL database. Set `VITE_USE_API=true` once backend API endpoints are running.
 
 Start the frontend development server:
 
@@ -497,13 +514,13 @@ JWT_SECRET="your_jwt_secret_key"
 
 ### 4️⃣ Database Setup (PostgreSQL + Prisma)
 
-Ensure your local PostgreSQL server is running, then run Prisma commands from inside the `backend` directory:
+Ensure your local PostgreSQL service is running, then run Prisma commands from inside the `backend` directory:
 
 ```bash
 # Generate the Prisma client
 npx prisma generate
 
-# Synchronize database schema
+# Push the schema to your PostgreSQL database
 npx prisma db push
 ```
 
@@ -511,11 +528,19 @@ npx prisma db push
 
 ### 5️⃣ Start the Backend Server
 
+To start the backend server directly:
+
 ```bash
-npm run dev
+node src/server.js
 ```
 
-The backend server will run on `http://localhost:5000` (or your configured port).
+Or using `nodemon` for auto-restart during development:
+
+```bash
+npx nodemon src/server.js
+```
+
+> **Backend Status:** The server currently returns a health check at `http://localhost:5000/`. Business API routes are under active development.
 
 ---
 
@@ -528,21 +553,16 @@ Run linting and production build checks in the `frontend` directory:
 ```bash
 cd frontend
 
-# Run ESLint checks
+# Run ESLint code checks
 npm run lint
 
-# Verify production build
+# Verify production bundle build
 npm run build
 ```
 
 ### Backend Verification
 
-```bash
-cd backend
-
-# Run backend test suite
-npm test
-```
+Automated test suites (`npm test`) are not yet configured for the backend (currently returns `Error: no test specified`). End-to-end integration and API test scripts are planned for Phase 07.
 
 ---
 
@@ -557,25 +577,26 @@ Frontend & UI Architecture
 └── Interactive modal workflows
 
 PHASE 02 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
-Authentication & Workspaces
-├── Role-based access control (Creator & Provider)
+Frontend Authentication & Workspaces
+├── Client-side role handling (Creator & Provider)
 ├── Multi-workspace navigation switcher
 ├── In-app provider access activation
 └── Session restoration & persistence
 
 PHASE 03 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
-Studio Discovery & Management
+Studio Discovery & Management (Frontend)
 ├── Studio discovery with keyword search
 ├── Location, price, and equipment filters
-├── Provider studio listing CRUD (Create, Edit, Delete)
+├── Provider studio listing CRUD (Create, Edit, Delete in client state)
 └── Studio details modal with capacity & gear lists
 
-PHASE 04 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
+PHASE 04 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
 Booking System & Conflict Prevention
-├── Interactive date & slot picker
-├── Overlapping booking conflict prevention
-├── Creator personal booking history & cancellation
-└── Provider booking request actions (Confirm, Reject, Complete)
+├── Interactive date & slot picker (Frontend UI: ✅)
+├── Client-side slot overlap check (Frontend demo: ✅)
+├── Creator personal booking history & cancellation (Frontend UI: ✅)
+├── Provider booking status actions (Frontend UI: ✅)
+└── Backend database conflict enforcement (Backend: 🚧)
 
 PHASE 05 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
 Backend API Implementation
@@ -586,13 +607,14 @@ Backend API Implementation
 
 PHASE 06 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
 Frontend-Backend Integration
+├── Connect frontend API service to Express endpoints
 ├── Switch VITE_USE_API to live backend mode
 ├── API error handling & network status alerts
 └── End-to-end booking transactions
 
 PHASE 07 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔜
 Testing & Final Deployment
-├── Full integration testing
+├── Backend test suite configuration
 ├── Production build verification
 └── Project presentation and review
 ```
