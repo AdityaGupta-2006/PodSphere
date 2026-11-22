@@ -1,175 +1,186 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../../layouts/DashboardLayout";
+import * as bookingApi from "../../services/bookingApi";
+import { useAuth } from "../../hooks/useAuth";
 
 function CreatorBookings() {
-  const [activeState, setActiveState] = useState("all");
+  const { user } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
-  const [targetBooking, setTargetBooking] = useState({
-    id: "BKG-2026-DEL-094",
-    studio: "Echo Room Studio",
-    schedule: "Oct 12, 2026 at 10:00 AM",
-  });
-  const [bookings, setBookings] = useState([
-    {
-      id: "BKG-2026-DEL-094",
-      studio: "Echo Room Studio",
-      location: "Delhi • 4 mics / 2 cameras",
-      date: "Oct 12, 2026",
-      day: "Monday",
-      time: "10:00 AM - 12:00 PM",
-      duration: "2.0 Hours Allocated",
-      amount: "₹3,000",
-      rateText: "₹1,500/hr rack rate",
-      status: "CONFIRMED",
-      icon: "mic",
-    },
-    {
-      id: "BKG-2026-BLR-041",
-      studio: "Sonic Loft Studio A",
-      location: "Bengaluru • Blackmagic 6K Pro",
-      date: "Sep 28, 2026",
-      day: "Wednesday",
-      time: "14:00 - 16:30",
-      duration: "2.5 Hours Mastered",
-      amount: "₹4,500",
-      rateText: "Settled in Full",
-      status: "COMPLETED",
-      icon: "videocam",
-    },
-  ]);
+  const [targetBooking, setTargetBooking] = useState(null);
+  const [cancelError, setCancelError] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const handleOpenCancelModal = (studio, schedule, id) => {
-    setTargetBooking({ studio, schedule, id });
+  const loadCreatorBookings = () => {
+    setLoading(true);
+    setError("");
+    const filter = user?.id ? { creatorId: user.id } : {};
+    bookingApi
+      .getBookings(filter)
+      .then((data) => {
+        setBookings(data || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load bookings");
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    let active = true;
+    const filter = user?.id ? { creatorId: user.id } : {};
+    bookingApi
+      .getBookings(filter)
+      .then((data) => {
+        if (active) {
+          setBookings(data || []);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message || "Failed to load bookings");
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  const handleOpenCancelModal = (booking) => {
+    setTargetBooking(booking);
+    setCancelError("");
     setModalOpen(true);
   };
 
   const handleCloseCancelModal = () => {
     setModalOpen(false);
+    setTargetBooking(null);
+    setCancelError("");
   };
 
-  const handleConfirmCancel = () => {
-    setBookings((prev) => prev.filter((b) => b.id !== targetBooking.id));
-    setModalOpen(false);
-    if (bookings.length <= 1) {
-      setActiveState("empty");
+  const handleConfirmCancel = async () => {
+    if (!targetBooking?.id) return;
+    setIsCancelling(true);
+    setCancelError("");
+    try {
+      await bookingApi.cancelBooking(targetBooking.id, user?.id);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === targetBooking.id ? { ...b, status: "CANCELLED" } : b))
+      );
+      setIsCancelling(false);
+      setModalOpen(false);
+      setTargetBooking(null);
+    } catch (err) {
+      setIsCancelling(false);
+      setCancelError(err.message || "Failed to cancel booking.");
     }
   };
+
+  const activeConfirmed = bookings.filter((b) => b.status === "CONFIRMED");
+  const completedRuns = bookings.filter((b) => b.status === "COMPLETED");
+  const totalCommitment = bookings
+    .filter((b) => b.status === "CONFIRMED" || b.status === "COMPLETED")
+    .reduce((sum, b) => sum + (Number(b.rawAmount) || 0), 0);
 
   return (
     <DashboardLayout activePath="/creator/bookings">
       <div className="flex flex-col w-full pb-16">
-        <div className="flex flex-wrap items-center justify-between gap-space-md py-4 border-b border-surface-container-high mb-8">
-          <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-tertiary"></span>
-            <span className="font-label-sm text-label-sm uppercase tracking-wider text-outline">
-              SESSION ROUTE: /CREATOR/BOOKINGS
-            </span>
-            <span className="text-surface-variant font-label-sm text-label-sm">|</span>
-            <span className="font-label-sm text-label-sm text-on-surface-variant">
-              ENDPOINT: GET /api/v1/bookings
-            </span>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md py-4 border-b border-surface-container-high mb-6">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-label-sm text-[10px] px-2 py-0.5 rounded bg-primary-container/20 text-primary font-mono uppercase tracking-wider">
+                CREATOR WORKSPACE
+              </span>
+              <span className="text-outline text-xs">• Session Pipeline</span>
+            </div>
+            <h1 className="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight">
+              My Studio Bookings
+            </h1>
+            <p className="font-body-md text-body-md text-on-surface-variant mt-1">
+              Review your upcoming and completed podcast recording sessions, dates, rates, and status.
+            </p>
           </div>
 
-          <div
-            className="flex items-center gap-1 p-1 bg-surface-container-lowest rounded-lg border border-surface-container-high"
-            role="tablist"
-          >
-            <button
-              className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm uppercase tracking-wider transition-colors flex items-center gap-1.5 ${
-                activeState === "all"
-                  ? "bg-surface-container border border-surface-container-highest text-on-surface"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-              id="tab-all"
-              onClick={() => setActiveState("all")}
-              type="button"
+          <div>
+            <Link
+              className="inline-flex items-center gap-2 px-space-lg h-[42px] bg-primary-container hover:bg-secondary-container text-on-primary-container rounded-lg font-body-md text-body-md font-medium transition-colors shadow-sm"
+              to="/creator/studios"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
-              <span>All Bookings ({bookings.length})</span>
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm uppercase tracking-wider transition-colors ${
-                activeState === "empty"
-                  ? "bg-surface-container border border-surface-container-highest text-on-surface"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-              id="tab-empty"
-              onClick={() => setActiveState("empty")}
-              type="button"
-            >
-              <span>Empty State</span>
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm uppercase tracking-wider transition-colors ${
-                activeState === "loading"
-                  ? "bg-surface-container border border-surface-container-highest text-on-surface"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-              id="tab-loading"
-              onClick={() => setActiveState("loading")}
-              type="button"
-            >
-              <span>Skeleton View</span>
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-md font-label-sm text-label-sm uppercase tracking-wider transition-colors ${
-                activeState === "error"
-                  ? "bg-surface-container border border-surface-container-highest text-on-surface"
-                  : "text-on-surface-variant hover:text-on-surface"
-              }`}
-              id="tab-error"
-              onClick={() => setActiveState("error")}
-              type="button"
-            >
-              <span>Error State</span>
-            </button>
+              <span className="material-symbols-outlined text-[18px]">search</span>
+              <span>Find More Studios</span>
+            </Link>
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-lg mb-8">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className="font-label-sm text-label-sm text-primary uppercase tracking-widest font-semibold">
-                SCHEDULE MATRIX
-              </span>
-              <span className="text-surface-variant font-label-sm text-label-sm">/</span>
-              <span className="font-label-sm text-label-sm text-outline">UNIT ID: CR-8941</span>
+        {loading ? (
+          <div className="space-y-6 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="h-28 bg-surface-container-low border border-surface-container-high rounded-lg p-4"></div>
+              <div className="h-28 bg-surface-container-low border border-surface-container-high rounded-lg p-4"></div>
+              <div className="h-28 bg-surface-container-low border border-surface-container-high rounded-lg p-4"></div>
+              <div className="h-28 bg-surface-container-low border border-surface-container-high rounded-lg p-4"></div>
             </div>
-            <h1 className="font-headline-lg text-headline-lg text-on-surface font-semibold tracking-tight">
-              My Bookings
-            </h1>
-            <p className="font-body-md text-body-md text-on-surface-variant">
-              View and manage your studio bookings.
-            </p>
+            <div className="h-64 bg-surface-container-low border border-surface-container-high rounded-lg"></div>
           </div>
-          <div className="flex items-center gap-space-sm shrink-0">
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-space-xl bg-surface-container-low border border-error-container/40 rounded-lg text-center">
+            <div className="w-16 h-16 rounded-full bg-error-container/20 border border-error-container/30 flex items-center justify-center text-error mb-4">
+              <span className="material-symbols-outlined text-[32px]">sync_problem</span>
+            </div>
+            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">
+              Failed to load bookings
+            </h3>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-sm mt-1 mb-6">
+              {error}
+            </p>
+            <button
+              className="inline-flex items-center gap-2 px-space-md h-9 bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high rounded-lg font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
+              onClick={loadCreatorBookings}
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Retry</span>
+            </button>
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-space-xl bg-surface-container-low border border-surface-container-high rounded-lg text-center">
+            <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center text-outline mb-4">
+              <span className="material-symbols-outlined text-[32px]">event_busy</span>
+            </div>
+            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">
+              No bookings yet
+            </h3>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-sm mt-1 mb-6">
+              You haven&apos;t booked any studio sessions yet. Find a verified studio to start recording.
+            </p>
             <Link
-              className="inline-flex items-center justify-center gap-2 px-space-md h-[42px] bg-primary-container hover:bg-inverse-primary text-on-primary font-body-sm text-body-sm font-medium rounded-lg border border-primary-container shadow-sm transition-all focus:outline-none focus:ring-1 focus:ring-primary"
+              className="inline-flex items-center gap-2 px-space-lg h-[42px] bg-primary-container hover:bg-secondary-container text-on-primary-container rounded-lg font-body-md text-body-md font-medium transition-colors shadow-sm"
               to="/creator/studios"
             >
               <span className="material-symbols-outlined text-[18px]">search</span>
               <span>Browse Studios</span>
             </Link>
           </div>
-        </div>
-
-        {activeState === "all" && (
-          <div className="flex flex-col space-y-6" id="state-all">
+        ) : (
+          <div className="flex flex-col space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="p-space-md bg-surface-container-low border border-surface-container-high rounded-lg flex flex-col justify-between">
                 <div className="flex items-center justify-between text-outline font-label-sm text-label-sm">
-                  <span>ALLOCATED SESSIONS</span>
+                  <span>TOTAL SESSIONS</span>
                   <span className="material-symbols-outlined text-[16px]">equalizer</span>
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="font-headline-md text-headline-md text-on-surface font-semibold">
-                    0{bookings.length}
+                    {String(bookings.length).padStart(2, "0")}
                   </span>
-                  <span className="font-label-sm text-label-sm text-outline">TOTAL RUNS</span>
-                </div>
-                <div className="mt-2 text-surface-variant text-[11px] font-label-sm">
-                  CALIBRATED AGAINST UTC+05:30
+                  <span className="font-label-sm text-label-sm text-outline">RUNS</span>
                 </div>
               </div>
 
@@ -180,316 +191,188 @@ function CreatorBookings() {
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="font-headline-md text-headline-md text-tertiary font-semibold">
-                    0{bookings.filter((b) => b.status === "CONFIRMED").length}
+                    {String(activeConfirmed.length).padStart(2, "0")}
                   </span>
                   <span className="font-label-sm text-label-sm text-tertiary">CONFIRMED</span>
                 </div>
-                <div className="mt-2 text-surface-variant text-[11px] font-label-sm">NEXT: OCT 12, 2026</div>
               </div>
 
               <div className="p-space-md bg-surface-container-low border border-surface-container-high rounded-lg flex flex-col justify-between">
                 <div className="flex items-center justify-between text-outline font-label-sm text-label-sm">
-                  <span>ARCHIVED RUNS</span>
+                  <span>COMPLETED RUNS</span>
                   <span className="material-symbols-outlined text-[16px] text-outline">inventory_2</span>
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="font-headline-md text-headline-md text-on-surface font-semibold">
-                    0{bookings.filter((b) => b.status === "COMPLETED").length}
+                    {String(completedRuns.length).padStart(2, "0")}
                   </span>
                   <span className="font-label-sm text-label-sm text-outline">COMPLETED</span>
                 </div>
-                <div className="mt-2 text-surface-variant text-[11px] font-label-sm">LAST: SEP 28, 2026</div>
               </div>
 
               <div className="p-space-md bg-surface-container-low border border-surface-container-high rounded-lg flex flex-col justify-between">
                 <div className="flex items-center justify-between text-outline font-label-sm text-label-sm">
-                  <span>COMMITMENT VALUE</span>
+                  <span>TOTAL VALUE</span>
                   <span className="material-symbols-outlined text-[16px] text-primary">payments</span>
                 </div>
                 <div className="mt-3 flex items-baseline gap-2">
-                  <span className="font-headline-md text-headline-md text-on-surface font-semibold">₹7,500</span>
-                  <span className="font-label-sm text-label-sm text-outline">GROSS</span>
-                </div>
-                <div className="mt-2 text-surface-variant text-[11px] font-label-sm">
-                  INR DIRECT SETTLEMENT
+                  <span className="font-headline-md text-headline-md text-on-surface font-semibold">
+                    ₹{totalCommitment.toLocaleString()}
+                  </span>
+                  <span className="font-label-sm text-label-sm text-outline">INR</span>
                 </div>
               </div>
             </div>
 
             <div className="bg-surface-container-low border border-surface-container-high rounded-lg overflow-hidden">
-              <div className="px-space-md py-3 bg-surface-container-lowest border-b border-surface-container-high flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                    BOOKING MATRIX
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-surface-container text-outline border border-surface-container-high font-label-sm text-[10px]">
-                    VERIFIED RECORDS
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface border border-surface-container-high text-on-surface-variant text-label-sm font-label-sm">
-                    <span className="material-symbols-outlined text-[14px]">tune</span>
-                    <span>FILTER: RECENT FIRST</span>
-                  </div>
-                </div>
+              <div className="hidden md:grid grid-cols-12 px-space-md py-2.5 bg-surface-container-lowest/60 text-outline font-label-sm text-label-sm uppercase tracking-wider border-b border-surface-container-high">
+                <div className="col-span-4">Studio &amp; Location</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-2">Time &amp; Duration</div>
+                <div className="col-span-2">Amount</div>
+                <div className="col-span-1">Status</div>
+                <div className="col-span-1 text-right">Action</div>
               </div>
 
-              <div className="w-full overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[760px]">
-                  <thead>
-                    <tr className="border-b border-surface-container-high bg-surface-container/60 font-label-sm text-label-sm text-outline uppercase tracking-wider">
-                      <th className="py-3 px-space-md font-medium">STUDIO &amp; LOCATION</th>
-                      <th className="py-3 px-space-md font-medium">DATE</th>
-                      <th className="py-3 px-space-md font-medium">TIME &amp; DURATION</th>
-                      <th className="py-3 px-space-md font-medium">AMOUNT</th>
-                      <th className="py-3 px-space-md font-medium">STATUS</th>
-                      <th className="py-3 px-space-md font-medium text-right">ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-container-high font-body-sm text-body-sm">
-                    {bookings.map((b) => (
-                      <tr key={b.id} className="hover:bg-surface-container/30 transition-colors group">
-                        <td className="py-4 px-space-md">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-surface-container-high border border-surface-container-highest shrink-0 flex items-center justify-center text-primary">
-                              <span className="material-symbols-outlined text-[20px]">{b.icon}</span>
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="font-body-md text-body-md font-semibold text-on-surface group-hover:text-primary transition-colors">
-                                {b.studio}
-                              </span>
-                              <span className="font-caption text-caption text-on-surface-variant flex items-center gap-1.5 mt-0.5">
-                                <span className="material-symbols-outlined text-[14px] text-outline">
-                                  location_on
-                                </span>
-                                {b.location}
-                              </span>
-                              <span className="font-label-sm text-[10px] text-outline mt-1">
-                                ID: {b.id}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-space-md whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-body-sm text-body-sm text-on-surface font-medium">
-                              {b.date}
-                            </span>
-                            <span className="font-label-sm text-label-sm text-outline">{b.day}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-space-md whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-body-sm text-body-sm text-on-surface">{b.time}</span>
-                            <span className="font-label-sm text-label-sm text-outline">{b.duration}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-space-md whitespace-nowrap">
-                          <div className="flex flex-col">
-                            <span className="font-body-md text-body-md font-semibold text-on-surface">
-                              {b.amount}
-                            </span>
-                            <span className="font-label-sm text-label-sm text-outline">{b.rateText}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-space-md whitespace-nowrap">
-                          {b.status === "CONFIRMED" ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#22c55e]/10 border border-[#22c55e]/40 text-[#22c55e] font-label-sm text-label-sm tracking-wide">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse"></span>
-                              CONFIRMED
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-surface-container-highest/50 border border-outline-variant text-on-surface-variant font-label-sm text-label-sm tracking-wide">
-                              <span className="w-1.5 h-1.5 rounded-full bg-outline"></span>
-                              COMPLETED
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-4 px-space-md whitespace-nowrap text-right">
-                          {b.status === "CONFIRMED" ? (
-                            <button
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary-container text-primary hover:bg-primary-container hover:text-on-primary transition-all font-body-sm text-body-sm font-medium"
-                              onClick={() =>
-                                handleOpenCancelModal(b.studio, `${b.date} at ${b.time.split(" - ")[0]}`, b.id)
-                              }
-                              type="button"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">close</span>
-                              <span>Cancel booking</span>
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 font-body-sm text-body-sm text-outline cursor-not-allowed select-none px-3 py-1.5">
-                              <span className="material-symbols-outlined text-[16px]">check</span>
-                              Completed
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-space-md py-3 bg-surface-container-lowest border-t border-surface-container-high flex flex-wrap items-center justify-between text-outline font-label-sm text-label-sm">
-                <div className="flex items-center gap-4">
-                  <span>SHOWING {bookings.length} OF {bookings.length} RECORDS</span>
-                  <span className="text-surface-variant">•</span>
-                  <span>PATCH ENGINE: ACTIVE</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span>CANCELLATION POLICY: FREE UP TO 24H PRIOR</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeState === "empty" && (
-          <div
-            className="flex flex-col items-center justify-center p-12 bg-surface-container-low border border-surface-container-high rounded-lg text-center my-6"
-            id="state-empty"
-          >
-            <div className="w-16 h-16 rounded-xl bg-surface-container border border-surface-container-highest flex items-center justify-center text-outline mb-4">
-              <svg className="w-8 h-8 text-outline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.5"
-                ></path>
-                <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"></path>
-              </svg>
-            </div>
-            <span className="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-1">
-              ZERO BOOKING RUNS
-            </span>
-            <h3 className="font-headline-md text-headline-md text-on-surface font-semibold mb-2">
-              No bookings yet
-            </h3>
-            <p className="font-body-md text-body-md text-on-surface-variant max-w-md mb-6">
-              You haven&apos;t booked a studio yet. Browse available studios to find a space for your next
-              recording.
-            </p>
-            <Link
-              className="inline-flex items-center gap-2 px-6 h-[42px] bg-primary-container hover:bg-inverse-primary text-on-primary font-body-sm text-body-sm font-medium rounded-lg border border-primary-container transition-all"
-              to="/creator/studios"
-            >
-              <span className="material-symbols-outlined text-[18px]">search</span>
-              <span>Browse Studios</span>
-            </Link>
-          </div>
-        )}
-
-        {activeState === "loading" && (
-          <div className="flex flex-col space-y-4 my-6" id="state-loading">
-            <div className="h-10 bg-surface-container-low border border-surface-container-high rounded-lg animate-pulse"></div>
-            <div className="bg-surface-container-low border border-surface-container-high rounded-lg p-space-md space-y-4">
-              <div className="h-6 bg-surface-container rounded w-1/4 animate-pulse"></div>
-              <div className="space-y-3">
-                <div className="h-14 bg-surface-container-high/40 rounded-lg animate-pulse"></div>
-                <div className="h-14 bg-surface-container-high/40 rounded-lg animate-pulse"></div>
-                <div className="h-14 bg-surface-container-high/40 rounded-lg animate-pulse"></div>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <div className="h-4 bg-surface-container rounded w-32 animate-pulse"></div>
-                <div className="h-4 bg-surface-container rounded w-24 animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeState === "error" && (
-          <div
-            className="flex flex-col items-center justify-center p-12 bg-surface-container-low border border-error-container/40 rounded-lg text-center my-6"
-            id="state-error"
-          >
-            <div className="w-16 h-16 rounded-xl bg-error-container/20 border border-error-container text-error flex items-center justify-center mb-4">
-              <span className="material-symbols-outlined text-[32px]">sync_problem</span>
-            </div>
-            <span className="font-label-sm text-label-sm text-error uppercase tracking-wider mb-1">
-              DATA PIPELINE FAULT 503
-            </span>
-            <h3 className="font-headline-md text-headline-md text-on-surface font-semibold mb-2">
-              Unable to load studio bookings
-            </h3>
-            <p className="font-body-md text-body-md text-on-surface-variant max-w-md mb-6">
-              Connection to <code className="text-primary font-label-sm">/api/v1/bookings</code> timed out.
-              The local rack console could not synchronize with telemetry streams.
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                className="inline-flex items-center gap-2 px-4 h-[38px] bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm text-body-sm rounded-lg border border-surface-container-highest transition-colors"
-                onClick={() => setActiveState("all")}
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
-                <span>Retry Connection</span>
-              </button>
-              <Link
-                className="inline-flex items-center gap-2 px-4 h-[38px] bg-primary-container text-on-primary font-body-sm text-body-sm rounded-lg border border-primary-container transition-colors"
-                to="/creator/studios"
-              >
-                <span>Browse Offline Racks</span>
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {modalOpen && (
-          <div
-            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
-            id="cancel-modal"
-          >
-            <div className="relative w-full max-w-md bg-[#111111] border border-[#272727] rounded-lg shadow-2xl overflow-hidden">
-              <div className="h-1.5 w-full bg-primary-container"></div>
-              <div className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-primary-container/10 border border-primary-container/30 flex items-center justify-center text-primary shrink-0">
-                    <span className="material-symbols-outlined text-[22px]">warning</span>
-                  </div>
-                  <div>
-                    <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">
-                      Cancel booking?
-                    </h3>
-                    <span className="font-label-sm text-[10px] text-outline uppercase tracking-wider">
-                      PATCH /api/v1/bookings/:id/cancel
-                    </span>
-                  </div>
-                </div>
-
-                <p className="font-body-md text-body-md text-on-surface-variant mb-4">
-                  Are you sure you want to cancel this booking? This action cannot be undone.
-                </p>
-
-                <div className="p-3.5 bg-[#171717] border border-[#272727] rounded-lg mb-6 flex flex-col gap-1">
-                  <span className="font-label-sm text-[10px] text-outline uppercase tracking-wider">
-                    RECORD TARGET
-                  </span>
-                  <div className="font-body-sm text-body-sm font-medium text-on-surface" id="modal-booking-details">
-                    {targetBooking.studio} - {targetBooking.schedule}
-                  </div>
-                  <span className="font-caption text-caption text-on-surface-variant mt-0.5">
-                    Refund policy applies: 100% credit will return to your creator balance.
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-end gap-3">
-                  <button
-                    className="px-4 h-[38px] rounded-lg bg-[#171717] hover:bg-surface-container border border-[#272727] hover:border-outline-variant text-on-surface font-body-sm text-body-sm font-medium transition-colors"
-                    onClick={handleCloseCancelModal}
-                    type="button"
+              <div className="divide-y divide-surface-container-high/60">
+                {bookings.map((b) => (
+                  <div
+                    key={b.id}
+                    className="p-space-md md:grid md:grid-cols-12 md:items-center gap-4 hover:bg-surface-container-high/30 transition-colors"
                   >
-                    Keep booking
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-1.5 px-4 h-[38px] rounded-lg bg-primary-container hover:bg-inverse-primary border border-primary-container text-on-primary font-body-sm text-body-sm font-medium transition-colors shadow-sm"
-                    onClick={handleConfirmCancel}
-                    type="button"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">delete_forever</span>
-                    <span>Cancel booking</span>
-                  </button>
+                    <div className="col-span-4 flex items-center gap-3 mb-3 md:mb-0">
+                      <div className="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-primary-fixed-dim shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">
+                          {b.icon || "mic"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-body-md text-body-md font-semibold text-on-surface truncate">
+                          {b.studio || b.studioName}
+                        </span>
+                        <div className="flex items-center gap-1 text-outline font-body-sm text-body-sm mt-0.5">
+                          <span className="material-symbols-outlined text-[14px]">pin_drop</span>
+                          <span className="truncate">{b.location}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 flex flex-col mb-2 md:mb-0">
+                      <span className="font-body-sm text-body-sm font-medium text-on-surface">
+                        {b.date}
+                      </span>
+                      <span className="font-caption text-caption text-outline">
+                        {b.day || "Scheduled"}
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 flex flex-col mb-2 md:mb-0">
+                      <span className="font-body-sm text-body-sm text-on-surface font-mono">
+                        {b.time}
+                      </span>
+                      <span className="font-caption text-caption text-outline">
+                        {b.duration}
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 flex flex-col mb-3 md:mb-0">
+                      <span className="font-body-md text-body-md font-semibold text-on-surface font-mono">
+                        {b.amount}
+                      </span>
+                      <span className="font-caption text-caption text-outline">
+                        {b.rate || "Standard rate"}
+                      </span>
+                    </div>
+
+                    <div className="col-span-1 mb-3 md:mb-0">
+                      {b.status === "CONFIRMED" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-tertiary-container/30 text-tertiary border border-tertiary-container/50 font-label-sm text-[11px] font-medium uppercase tracking-wider">
+                          <span className="w-1.5 h-1.5 rounded-full bg-tertiary"></span>
+                          CONFIRMED
+                        </span>
+                      ) : b.status === "COMPLETED" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-outline border border-surface-container-highest font-label-sm text-[11px] uppercase tracking-wider">
+                          COMPLETED
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-error-container/20 text-error border border-error-container/40 font-label-sm text-[11px] uppercase tracking-wider">
+                          {b.status}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="col-span-1 flex items-center md:justify-end">
+                      {b.status === "CONFIRMED" || b.status === "PENDING" ? (
+                        <button
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-primary-container/40 text-primary hover:bg-primary-container/10 hover:border-primary-container font-body-sm text-body-sm transition-colors cursor-pointer"
+                          onClick={() => handleOpenCancelModal(b)}
+                          type="button"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                          <span>Cancel</span>
+                        </button>
+                      ) : (
+                        <span className="font-body-sm text-body-sm text-outline px-3 py-1.5">
+                          {b.status === "CANCELLED" ? "Cancelled" : "Finished"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {modalOpen && targetBooking && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto my-auto bg-surface-container-lowest border border-surface-container-high rounded-xl shadow-2xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-error-container/20 border border-error-container/30 flex items-center justify-center text-error shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">warning</span>
                 </div>
+                <div>
+                  <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface">
+                    Cancel booking?
+                  </h3>
+                  <span className="font-caption text-caption text-outline">
+                    This reservation will be cancelled.
+                  </span>
+                </div>
+              </div>
+
+              {cancelError && (
+                <div className="p-3 bg-error-container/20 border border-error-container/40 rounded-lg text-error text-body-sm mb-4">
+                  {cancelError}
+                </div>
+              )}
+
+              <div className="p-3.5 bg-surface-container-low border border-surface-container-high rounded-lg mb-6 flex flex-col gap-1">
+                <span className="font-body-sm text-body-sm font-medium text-on-surface">
+                  {targetBooking.studio || targetBooking.studioName}
+                </span>
+                <span className="font-caption text-caption text-outline">
+                  {targetBooking.date} • {targetBooking.time}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  className="px-4 h-[38px] rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
+                  onClick={handleCloseCancelModal}
+                  type="button"
+                >
+                  Keep booking
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 px-4 h-[38px] rounded-lg bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm text-body-sm font-medium transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+                  disabled={isCancelling}
+                  onClick={handleConfirmCancel}
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                  <span>{isCancelling ? "Cancelling..." : "Confirm cancellation"}</span>
+                </button>
               </div>
             </div>
           </div>
