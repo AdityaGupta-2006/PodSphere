@@ -373,7 +373,7 @@ export async function cancelBooking(id, creatorId) {
 }
 
 export async function updateBookingStatus(id, newStatus) {
-  const validStatuses = ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED"];
+  const validStatuses = ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED", "REJECTED"];
   const upper = (newStatus || "").toUpperCase();
 
   if (!validStatuses.includes(upper)) {

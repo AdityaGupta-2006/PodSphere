@@ -274,6 +274,12 @@ export async function updateStudio(id, studioData) {
     throw error;
   }
 
+  if (!studioData.city || !String(studioData.city).trim()) {
+    const error = new Error("Studio city is required.");
+    error.status = 400;
+    throw error;
+  }
+
   if (!numRate || numRate <= 0) {
     const error = new Error("Hourly rate must be a valid positive number.");
     error.status = 400;
