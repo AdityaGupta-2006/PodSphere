@@ -222,6 +222,9 @@ async function deleteStudio(req, res, next) {
       message: "Studio deleted successfully."
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }

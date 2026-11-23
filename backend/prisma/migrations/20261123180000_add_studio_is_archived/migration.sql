@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Studio" ADD COLUMN IF NOT EXISTS "isArchived" BOOLEAN NOT NULL DEFAULT false;

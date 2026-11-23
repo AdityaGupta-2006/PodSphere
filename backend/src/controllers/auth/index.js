@@ -65,6 +65,9 @@ async function register(req, res, next) {
       user: authService.formatUserResponse(newUser)
     });
   } catch (err) {
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: "An account with this email already exists." });
+    }
     next(err);
   }
 }

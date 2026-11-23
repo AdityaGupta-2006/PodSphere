@@ -69,6 +69,7 @@ function ProviderBookings() {
           setError(err.message || "Failed to load incoming provider bookings.");
           setBookings([]);
           setStudios([]);
+          setActionError(err?.message || "Failed to load bookings.");
           setLoading(false);
         }
       });
@@ -228,6 +229,7 @@ function ProviderBookings() {
                   <option value="ALL">All Statuses</option>
                   <option value="CONFIRMED">Confirmed</option>
                   <option value="PENDING">Pending Review</option>
+                  <option value="REJECTED">Rejected</option>
                   <option value="COMPLETED">Completed</option>
                   <option value="CANCELLED">Cancelled</option>
                 </select>
@@ -285,14 +287,25 @@ function ProviderBookings() {
             </div>
           </div>
 
-          <button
-            className="flex items-center gap-1.5 px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface font-body-sm text-body-sm transition-colors cursor-pointer shrink-0 border border-surface-container-high"
-            onClick={clearFilters}
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[16px]">backspace</span>
-            <span>Clear Filters</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              className="flex items-center gap-1.5 px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface font-body-sm text-body-sm transition-colors cursor-pointer border border-surface-container-high"
+              onClick={loadData}
+              type="button"
+              title="Refresh bookings"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Refresh</span>
+            </button>
+            <button
+              className="flex items-center gap-1.5 px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface font-body-sm text-body-sm transition-colors cursor-pointer border border-surface-container-high"
+              onClick={clearFilters}
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[16px]">backspace</span>
+              <span>Clear Filters</span>
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -434,7 +447,13 @@ function ProviderBookings() {
                           </span>
                         ) : b.status === "PENDING" ? (
                           <span className="inline-flex items-center gap-1.5 text-primary-container font-label-sm text-label-sm uppercase tracking-wider">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
                             PENDING
+                          </span>
+                        ) : b.status === "REJECTED" ? (
+                          <span className="inline-flex items-center gap-1.5 text-error font-label-sm text-label-sm uppercase tracking-wider">
+                            <span className="w-1.5 h-1.5 rounded-full bg-error"></span>
+                            REJECTED
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 text-outline font-label-sm text-label-sm uppercase tracking-wider">
@@ -549,7 +568,9 @@ function ProviderBookings() {
                 </div>
                 <div className="p-3 bg-surface-container rounded-lg border border-surface-container-high flex justify-between items-center">
                   <span className="text-outline font-label-sm uppercase">Status</span>
-                  <span className="font-mono text-tertiary uppercase">{selectedBookingDetails.status}</span>
+                  <span className={`font-mono uppercase font-semibold ${selectedBookingDetails.status === "REJECTED" ? "text-error" : selectedBookingDetails.status === "CONFIRMED" || selectedBookingDetails.status === "COMPLETED" ? "text-tertiary" : "text-primary-container"}`}>
+                    {selectedBookingDetails.status}
+                  </span>
                 </div>
               </div>
 

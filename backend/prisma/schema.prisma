@@ -33,6 +33,7 @@ model Studio {
   hourlyRate  Decimal  @db.Decimal(10, 2)
   gear        String[] @default([])
   imageUrl    String?
+  isArchived  Boolean  @default(false)
 
   provider User      @relation(fields: [providerId], references: [id])
   bookings Booking[]

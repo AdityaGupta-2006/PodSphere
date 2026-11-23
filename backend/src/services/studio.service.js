@@ -40,7 +40,9 @@ function formatStudio(studio) {
 
 // Fetch studios matching optional filters (public listing omits provider email)
 async function getAllStudios(filters = {}) {
-  const where = {};
+  const where = {
+    isArchived: false
+  };
 
   if (filters.providerId && isValidUuid(filters.providerId)) {
     where.providerId = filters.providerId;
@@ -96,9 +98,10 @@ async function getStudioById(id) {
     return null;
   }
 
-  const studio = await prisma.studio.findUnique({
+  const studio = await prisma.studio.findFirst({
     where: {
-      id: id
+      id: id,
+      isArchived: false
     },
     include: {
       provider: {

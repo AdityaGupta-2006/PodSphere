@@ -290,7 +290,7 @@ PodSphere follows a modular full-stack architecture:
                        │  • Auth & JWT Routes    │
                        │  • Studio Controllers   │
                        │  • Booking Controllers  │
-                       │  • Conflict Middleware  │
+                       │  • Concurrency Locks    │
                        └────────────┬────────────┘
                                     │
                                 Prisma ORM

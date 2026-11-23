@@ -56,7 +56,12 @@ function formatBooking(booking) {
 async function createBookingWithLock({ studioId, creatorId, startTime, endTime, totalAmount }) {
   return await prisma.$transaction(async (tx) => {
     // 1. Acquire pessimistic row lock on the Studio to serialize concurrent reservation requests
-    await tx.$queryRaw`SELECT id FROM "Studio" WHERE id = ${studioId}::uuid FOR UPDATE`;
+    const studioRows = await tx.$queryRaw`SELECT id, "isArchived" FROM "Studio" WHERE id = ${studioId}::uuid FOR UPDATE`;
+    if (!studioRows || studioRows.length === 0 || studioRows[0].isArchived) {
+      const err = new Error(`Studio with id ${studioId} not found or is no longer available.`);
+      err.status = 404;
+      throw err;
+    }
 
     // 2. Check for overlapping reservations for this studio in active states (PENDING or CONFIRMED)
     const conflict = await tx.booking.findFirst({
@@ -309,5 +314,7 @@ module.exports = {
   getBookingsForProvider,
   getBookingById,
   updateBookingStatus,
-  cancelBooking
+  cancelBooking,
+  updateBookingStatusAtomic,
+  cancelBookingAtomic
 };

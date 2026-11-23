@@ -65,6 +65,13 @@ function ProtectedRoute({ children, allowedRoles }) {
               Your account ({user?.email}) is currently set up as a creator. Activate Provider Access to list recording spaces, set hourly pricing, and accept studio bookings.
             </p>
 
+            {activationError && (
+              <div className="w-full p-space-sm mb-space-md bg-error-container/20 border border-error/30 text-error rounded-xl font-body-sm flex items-center gap-2 text-left">
+                <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
+                <span>{activationError}</span>
+              </div>
+            )}
+
             <div className="w-full bg-surface-container-lowest rounded-xl p-space-md border border-surface-container-high mb-space-lg text-left flex flex-col gap-space-sm">
               <div className="flex items-start gap-space-sm">
                 <span className="material-symbols-outlined text-tertiary text-[20px] mt-0.5">check_circle</span>

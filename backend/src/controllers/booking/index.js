@@ -16,6 +16,21 @@ async function createBooking(req, res, next) {
       return res.status(400).json({ error: "Booking date is required." });
     }
 
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(rawDate.trim())) {
+      return res.status(400).json({ error: "Invalid date format. Expected YYYY-MM-DD." });
+    }
+
+    const [year, month, day] = rawDate.trim().split("-").map(Number);
+    const testDate = new Date(Date.UTC(year, month - 1, day));
+    if (
+      testDate.getUTCFullYear() !== year ||
+      testDate.getUTCMonth() !== month - 1 ||
+      testDate.getUTCDate() !== day
+    ) {
+      return res.status(400).json({ error: "Invalid calendar date." });
+    }
+
     if (!time || typeof time !== "string" || !time.trim()) {
       return res.status(400).json({ error: "Time slot is required." });
     }
@@ -234,6 +249,7 @@ async function cancelBooking(req, res, next) {
 
     return res.status(200).json({
       success: true,
+      message: "Booking cancelled successfully. Payment will be refunded.",
       booking: updated
     });
   } catch (err) {

@@ -294,12 +294,21 @@ export async function createBooking(bookingData) {
     throw error;
   }
 
-  const selectedDate = new Date(`${bookingData.rawDate}T23:59:59`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(bookingData.rawDate)) {
+    const error = new Error("Invalid date format. Expected YYYY-MM-DD.");
+    error.status = 400;
+    throw error;
+  }
 
-  if (selectedDate < today) {
-    const error = new Error("Booking date cannot be in the past.");
+  const [year, month, day] = bookingData.rawDate.split("-").map(Number);
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    testDate.getUTCFullYear() !== year ||
+    testDate.getUTCMonth() !== month - 1 ||
+    testDate.getUTCDate() !== day
+  ) {
+    const error = new Error("Invalid calendar date.");
     error.status = 400;
     throw error;
   }
@@ -308,6 +317,34 @@ export async function createBooking(bookingData) {
     const error = new Error("Time slot is required.");
     error.status = 400;
     throw error;
+  }
+
+  // Parse time and validate that start time is in the future
+  const timeParts = bookingData.time.split("-");
+  if (timeParts.length === 2) {
+    const cleanTime = timeParts[0].trim();
+    let hours = 0;
+    let minutes = 0;
+    const match12 = cleanTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    const match24 = cleanTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (match12) {
+      hours = parseInt(match12[1], 10);
+      minutes = parseInt(match12[2], 10);
+      const meridian = match12[3].toUpperCase();
+      if (meridian === "PM" && hours < 12) hours += 12;
+      if (meridian === "AM" && hours === 12) hours = 0;
+    } else if (match24) {
+      hours = parseInt(match24[1], 10);
+      minutes = parseInt(match24[2], 10);
+    }
+
+    const pad = (n) => String(n).padStart(2, "0");
+    const slotStartTime = new Date(`${bookingData.rawDate}T${pad(hours)}:${pad(minutes)}:00+05:30`);
+    if (!isNaN(slotStartTime.getTime()) && slotStartTime <= new Date()) {
+      const error = new Error("Booking start time must be in the future.");
+      error.status = 400;
+      throw error;
+    }
   }
 
   if (isApiMode) {
@@ -491,9 +528,27 @@ export async function updateBookingStatus(id, newStatus) {
   const userIndex = userBookings.findIndex((b) => String(b.id) === String(id));
 
   if (userIndex !== -1) {
+    const current = userBookings[userIndex];
+    if (["REJECTED", "CANCELLED", "COMPLETED"].includes(current.status)) {
+      const error = new Error(`Cannot change status of a ${current.status} booking.`);
+      error.status = 400;
+      throw error;
+    }
+    if (current.status === "PENDING" && !["CONFIRMED", "REJECTED"].includes(upper)) {
+      const error = new Error("Pending bookings can only be CONFIRMED or REJECTED.");
+      error.status = 400;
+      throw error;
+    }
+    if (current.status === "CONFIRMED" && upper !== "COMPLETED") {
+      const error = new Error("Confirmed bookings can only transition to COMPLETED.");
+      error.status = 400;
+      throw error;
+    }
+
     const updated = {
-      ...userBookings[userIndex],
+      ...current,
       status: upper,
+      paymentStatus: upper === "REJECTED" ? "REFUNDED" : current.paymentStatus,
       updatedAt: new Date().toISOString(),
     };
     userBookings[userIndex] = updated;
@@ -505,9 +560,27 @@ export async function updateBookingStatus(id, newStatus) {
   if (demoBooking) {
     const modifiedMap = getModifiedBookingsMap();
     const current = modifiedMap[id] ? { ...demoBooking, ...modifiedMap[id] } : demoBooking;
+
+    if (["REJECTED", "CANCELLED", "COMPLETED"].includes(current.status)) {
+      const error = new Error(`Cannot change status of a ${current.status} booking.`);
+      error.status = 400;
+      throw error;
+    }
+    if (current.status === "PENDING" && !["CONFIRMED", "REJECTED"].includes(upper)) {
+      const error = new Error("Pending bookings can only be CONFIRMED or REJECTED.");
+      error.status = 400;
+      throw error;
+    }
+    if (current.status === "CONFIRMED" && upper !== "COMPLETED") {
+      const error = new Error("Confirmed bookings can only transition to COMPLETED.");
+      error.status = 400;
+      throw error;
+    }
+
     const updated = {
       ...current,
       status: upper,
+      paymentStatus: upper === "REJECTED" ? "REFUNDED" : current.paymentStatus,
       updatedAt: new Date().toISOString(),
     };
     modifiedMap[id] = updated;
