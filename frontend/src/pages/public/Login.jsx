@@ -34,8 +34,8 @@ function Login() {
       return;
     }
 
-    if (!trimmedPassword || trimmedPassword.length < 6) {
-      setErrorMessage("Password must be at least 6 characters.");
+    if (!trimmedPassword || trimmedPassword.length < 8) {
+      setErrorMessage("Password must be at least 8 characters.");
       return;
     }
 

@@ -137,8 +137,9 @@ export function AuthProvider({ children }) {
           };
           localStorage.setItem("podsphere_registered_users", JSON.stringify(usersList));
         }
-      } catch (err) {
-        void err;
+      } catch {
+        // Non-critical: failed to persist updated role to registered-users list.
+        // State is already updated in memory; ignore storage errors silently.
       }
     }
     return updatedUser;

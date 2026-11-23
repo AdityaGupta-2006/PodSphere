@@ -8,6 +8,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -50,7 +51,7 @@ model Booking {
   startTime   DateTime
   endTime     DateTime
   totalAmount Decimal       @db.Decimal(10, 2)
-  status      BookingStatus @default(CONFIRMED)
+  status      BookingStatus @default(PENDING)
 
   creator User @relation(fields: [creatorId], references: [id], onDelete: Restrict)
 
@@ -70,7 +71,9 @@ enum Role {
 }
 
 enum BookingStatus {
+  PENDING
   CONFIRMED
+  REJECTED
   CANCELLED
   COMPLETED
 }
