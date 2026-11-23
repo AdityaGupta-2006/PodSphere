@@ -1,11 +1,8 @@
-const express = require("express");
+const app = require("./app");
+const { PORT } = require("./config/env");
 
-const app = express();
-
-app.get("/", (req, res) => {
-    res.json({ message: "Backend is running" });
+const server = app.listen(PORT, () => {
+  console.log(`PodSphere backend running on http://localhost:${PORT}`);
 });
 
-app.listen(5000, "127.0.0.1", () => {
-    console.log("SERVER IS RUNNING");
-});
+module.exports = server;

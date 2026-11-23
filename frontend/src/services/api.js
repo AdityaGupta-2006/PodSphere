@@ -1,9 +1,13 @@
-const API_BASE_URL =
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) ||
-  (typeof globalThis.process !== "undefined" && globalThis.process.env && globalThis.process.env.VITE_API_URL) ||
-  "http://localhost:5000/api";
+function getApiBaseUrl() {
+  return (
+    (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) ||
+    (typeof globalThis.process !== "undefined" && globalThis.process.env && globalThis.process.env.VITE_API_URL) ||
+    "http://localhost:5001/api"
+  );
+}
 
 export async function request(endpoint, options = {}) {
+  const baseUrl = getApiBaseUrl();
   const token = localStorage.getItem("podsphere_token");
   const headers = {
     "Content-Type": "application/json",
@@ -13,12 +17,12 @@ export async function request(endpoint, options = {}) {
 
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    response = await fetch(`${baseUrl}${endpoint}`, {
       ...options,
       headers,
     });
   } catch {
-    const error = new Error(`Unable to connect to server. Please verify the backend is running at ${API_BASE_URL}`);
+    const error = new Error(`Unable to connect to server. Please verify the backend is running at ${baseUrl}`);
     error.status = 503;
     throw error;
   }

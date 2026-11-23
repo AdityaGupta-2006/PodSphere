@@ -2,9 +2,12 @@ import { request } from "./api.js";
 
 const USERS_STORAGE_KEY = "podsphere_registered_users";
 const isApiMode =
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  import.meta.env.VITE_USE_API === "true";
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_USE_API === "true") ||
+  (typeof globalThis.process !== "undefined" &&
+    globalThis.process.env &&
+    globalThis.process.env.VITE_USE_API === "true");
 
 function getRegisteredUsers() {
   const stored = localStorage.getItem(USERS_STORAGE_KEY);
@@ -165,3 +168,19 @@ export async function getCurrentUser() {
     return null;
   }
 }
+
+export async function activateProvider() {
+  if (isApiMode) {
+    const data = await request("/auth/activate-provider", {
+      method: "POST",
+    });
+    if (data && data.token && data.user) {
+      return {
+        user: normalizeUser(data.user),
+        token: data.token,
+      };
+    }
+  }
+  return null;
+}
+

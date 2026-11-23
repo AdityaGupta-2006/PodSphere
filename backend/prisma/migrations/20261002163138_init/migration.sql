@@ -2,7 +2,7 @@
 CREATE TYPE "Role" AS ENUM ('USER', 'PROVIDER');
 
 -- CreateEnum
-CREATE TYPE "BookingStatus" AS ENUM ('CONFIRMED', 'CANCELLED', 'COMPLETED');
+CREATE TYPE "BookingStatus" AS ENUM ('PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'COMPLETED');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -27,6 +27,7 @@ CREATE TABLE "Studio" (
     "address" TEXT NOT NULL,
     "hourlyRate" DECIMAL(10,2) NOT NULL,
     "gear" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "imageUrl" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -41,7 +42,7 @@ CREATE TABLE "Booking" (
     "startTime" TIMESTAMP(3) NOT NULL,
     "endTime" TIMESTAMP(3) NOT NULL,
     "totalAmount" DECIMAL(10,2) NOT NULL,
-    "status" "BookingStatus" NOT NULL DEFAULT 'CONFIRMED',
+    "status" "BookingStatus" NOT NULL DEFAULT 'PENDING',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
