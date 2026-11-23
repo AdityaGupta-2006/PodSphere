@@ -1,3 +1,26 @@
+// Validate ISO calendar date string (YYYY-MM-DD) without silent JS rollover
+function isValidCalendarDate(rawDate) {
+  if (!rawDate || typeof rawDate !== "string") return false;
+  const clean = rawDate.trim();
+  const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const day = parseInt(match[3], 10);
+
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day
+  );
+}
+
 // Parse single time string in 12h or 24h format e.g. "10:00 AM", "12:00 PM", "14:00", "16:30"
 function parseSingleTimeString(timeStr) {
   if (!timeStr || typeof timeStr !== "string") return null;
@@ -10,6 +33,11 @@ function parseSingleTimeString(timeStr) {
     const minutes = parseInt(match12[2], 10);
     const meridian = match12[3].toUpperCase();
 
+    // Enforce 12-hour clock boundaries: 1..12 hours, 0..59 minutes
+    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
     if (meridian === "PM" && hours < 12) hours += 12;
     if (meridian === "AM" && hours === 12) hours = 0;
 
@@ -21,6 +49,12 @@ function parseSingleTimeString(timeStr) {
   if (match24) {
     const hours = parseInt(match24[1], 10);
     const minutes = parseInt(match24[2], 10);
+
+    // Enforce 24-hour clock boundaries: 0..23 hours, 0..59 minutes
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return null;
+    }
+
     return { hours, minutes };
   }
 
@@ -31,6 +65,7 @@ function parseSingleTimeString(timeStr) {
 // Treats input as Indian Standard Time (Asia/Kolkata: UTC+05:30) and returns UTC Date objects
 function parseTimeSlot(rawDate, timeRangeStr) {
   if (!rawDate || !timeRangeStr || typeof timeRangeStr !== "string") return null;
+  if (!isValidCalendarDate(rawDate)) return null;
 
   const parts = timeRangeStr.split("-");
   if (parts.length !== 2) return null;
@@ -41,8 +76,9 @@ function parseTimeSlot(rawDate, timeRangeStr) {
   if (!startParsed || !endParsed) return null;
 
   const pad = (n) => String(n).padStart(2, "0");
-  const startIso = `${rawDate}T${pad(startParsed.hours)}:${pad(startParsed.minutes)}:00+05:30`;
-  const endIso = `${rawDate}T${pad(endParsed.hours)}:${pad(endParsed.minutes)}:00+05:30`;
+  const cleanDate = rawDate.trim();
+  const startIso = `${cleanDate}T${pad(startParsed.hours)}:${pad(startParsed.minutes)}:00+05:30`;
+  const endIso = `${cleanDate}T${pad(endParsed.hours)}:${pad(endParsed.minutes)}:00+05:30`;
 
   const startTime = new Date(startIso);
   const endTime = new Date(endIso);
@@ -110,6 +146,7 @@ function formatBookingTimes(startTime, endTime) {
 }
 
 module.exports = {
+  isValidCalendarDate,
   parseSingleTimeString,
   parseTimeSlot,
   formatBookingTimes

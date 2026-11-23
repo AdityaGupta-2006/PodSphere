@@ -149,6 +149,45 @@ function getAllBookings() {
   return [...userBookings, ...demoList];
 }
 
+// Parse time slot string for demo mode interval conflict detection
+function parseDemoSlot(rawDate, timeRangeStr) {
+  if (!rawDate || !timeRangeStr || typeof timeRangeStr !== "string") return null;
+  const parts = timeRangeStr.split("-");
+  if (parts.length !== 2) return null;
+
+  const parseSingle = (str) => {
+    const clean = str.trim();
+    const m12 = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (m12) {
+      let h = parseInt(m12[1], 10);
+      const m = parseInt(m12[2], 10);
+      const mer = m12[3].toUpperCase();
+      if (mer === "PM" && h < 12) h += 12;
+      if (mer === "AM" && h === 12) h = 0;
+      return { h, m };
+    }
+    const m24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+    if (m24) {
+      return { h: parseInt(m24[1], 10), m: parseInt(m24[2], 10) };
+    }
+    return null;
+  };
+
+  const s = parseSingle(parts[0]);
+  const e = parseSingle(parts[1]);
+  if (!s || !e) return null;
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const sIso = `${rawDate}T${pad(s.h)}:${pad(s.m)}:00+05:30`;
+  const eIso = `${rawDate}T${pad(e.h)}:${pad(e.m)}:00+05:30`;
+
+  const startMs = new Date(sIso).getTime();
+  const endMs = new Date(eIso).getTime();
+  if (isNaN(startMs) || isNaN(endMs) || endMs <= startMs) return null;
+
+  return { start: startMs, end: endMs };
+}
+
 export async function getBookings(filters = {}) {
   const query = new URLSearchParams(filters).toString();
   const endpoint = query ? `/bookings?${query}` : "/bookings";
@@ -181,6 +220,46 @@ export async function getBookings(filters = {}) {
   }
 
   return bookings;
+}
+
+export async function getProviderBookings(filters = {}) {
+  const query = new URLSearchParams(filters).toString();
+  const endpoint = query ? `/bookings/provider?${query}` : "/bookings/provider";
+
+  if (isApiMode) {
+    const data = await request(endpoint);
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.bookings)) return data.bookings;
+    return [];
+  }
+
+  let bookings = getAllBookings();
+
+  if (filters.status && filters.status !== "ALL" && filters.status !== "All Statuses") {
+    bookings = bookings.filter(
+      (b) => b.status.toUpperCase() === filters.status.toUpperCase()
+    );
+  }
+
+  if (filters.studioId && filters.studioId !== "ALL" && filters.studioId !== "All Studios" && filters.studioId !== "All My Studios") {
+    bookings = bookings.filter((b) => String(b.studioId) === String(filters.studioId));
+  }
+
+  return bookings;
+}
+
+export async function getCreatorBookings(filters = {}) {
+  const query = new URLSearchParams(filters).toString();
+  const endpoint = query ? `/bookings/creator?${query}` : "/bookings/creator";
+
+  if (isApiMode) {
+    const data = await request(endpoint);
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.bookings)) return data.bookings;
+    return [];
+  }
+
+  return getBookings(filters);
 }
 
 export async function getBookingById(id) {
@@ -242,13 +321,28 @@ export async function createBooking(bookingData) {
     throw error;
   }
 
+  const newSlot = parseDemoSlot(bookingData.rawDate, bookingData.time);
+  if (newSlot && newSlot.start < Date.now()) {
+    const error = new Error("Cannot book a time slot in the past.");
+    error.status = 400;
+    throw error;
+  }
+
   const allBookings = getAllBookings();
   const hasConflict = allBookings.some((b) => {
     const matchStudio = String(b.studioId) === String(bookingData.studioId);
     const matchDate = b.rawDate === bookingData.rawDate;
-    const matchTime = b.time === bookingData.time;
     const isActive = b.status === "CONFIRMED" || b.status === "PENDING";
-    return matchStudio && matchDate && matchTime && isActive;
+    if (!matchStudio || !matchDate || !isActive) return false;
+
+    // Check interval overlap: existingStart < newEnd && existingEnd > newStart
+    if (newSlot) {
+      const existingSlot = parseDemoSlot(b.rawDate, b.time);
+      if (existingSlot) {
+        return existingSlot.start < newSlot.end && existingSlot.end > newSlot.start;
+      }
+    }
+    return b.time === bookingData.time;
   });
 
   if (hasConflict) {
@@ -283,8 +377,8 @@ export async function createBooking(bookingData) {
     amount: `₹${rawAmount.toLocaleString()}`,
     rawAmount: rawAmount,
     totalPrice: rawAmount,
-    status: "CONFIRMED",
-    paymentStatus: "PAID ESCROW",
+    status: "PENDING",
+    paymentStatus: "HOLD PENDING",
     icon: "mic",
     createdAt: new Date().toISOString(),
     isDemo: false,
@@ -376,7 +470,7 @@ export async function cancelBooking(id, creatorId) {
 }
 
 export async function updateBookingStatus(id, newStatus) {
-  const validStatuses = ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED"];
+  const validStatuses = ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED", "REJECTED"];
   const upper = (newStatus || "").toUpperCase();
 
   if (!validStatuses.includes(upper)) {

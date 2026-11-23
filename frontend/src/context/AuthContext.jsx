@@ -114,17 +114,25 @@ export function AuthProvider({ children }) {
     if (!user) return null;
 
     let backendUser = null;
-    try {
+    const isApiMode =
+      (typeof import.meta !== "undefined" &&
+        import.meta.env &&
+        import.meta.env.VITE_USE_API === "true") ||
+      (typeof globalThis.process !== "undefined" &&
+        globalThis.process.env &&
+        globalThis.process.env.VITE_USE_API === "true");
+
+    if (isApiMode) {
+      // In API mode, must escalate on backend; do not silently fake activation on failure
       const res = await authApi.activateProvider();
-      if (res && res.user) {
-        backendUser = res.user;
-        if (res.token) {
-          setToken(res.token);
-          localStorage.setItem("podsphere_token", res.token);
-        }
+      if (!res || !res.user) {
+        throw new Error("Failed to activate provider privileges on server.");
       }
-    } catch (err) {
-      void err;
+      backendUser = res.user;
+      if (res.token) {
+        setToken(res.token);
+        localStorage.setItem("podsphere_token", res.token);
+      }
     }
 
     const currentRoles = Array.isArray(user.roles) ? user.roles : [user.role || "creator"];

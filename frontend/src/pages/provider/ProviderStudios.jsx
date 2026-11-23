@@ -11,6 +11,7 @@ function ProviderStudios() {
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [studios, setStudios] = useState([]);
   const [toast, setToast] = useState({ visible: false, title: "", message: "" });
 
@@ -19,6 +20,23 @@ function ProviderStudios() {
     setTimeout(() => {
       setToast({ visible: false, title: "", message: "" });
     }, 3200);
+  };
+
+  const loadStudios = () => {
+    setLoading(true);
+    setError("");
+    const filter = user?.id ? { providerId: user.id } : {};
+    studioApi
+      .getStudios(filter)
+      .then((data) => {
+        setStudios(data || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err?.message || "Failed to load studios from server.");
+        setStudios([]);
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -32,8 +50,9 @@ function ProviderStudios() {
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (active) {
+          setError(err?.message || "Failed to load studios from server.");
           setStudios([]);
           setLoading(false);
         }
@@ -100,6 +119,26 @@ function ProviderStudios() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-space-lg animate-pulse">
             <div className="h-96 rounded-xl bg-surface-container-lowest border border-surface-container-high p-space-md"></div>
             <div className="h-96 rounded-xl bg-surface-container-lowest border border-surface-container-high p-space-md"></div>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-space-xl rounded-xl bg-surface-container-lowest text-center border border-error-container/40 my-space-md">
+            <div className="w-16 h-16 rounded-full bg-error-container/20 border border-error-container/30 flex items-center justify-center text-error mb-space-md">
+              <span className="material-symbols-outlined text-[32px]">sync_problem</span>
+            </div>
+            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface mb-1">
+              Failed to load studios
+            </h3>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-sm mb-space-lg">
+              {error}
+            </p>
+            <button
+              className="flex items-center gap-space-xs px-space-md h-[42px] rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-body-md text-body-md font-medium transition-colors cursor-pointer"
+              onClick={loadStudios}
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[18px]">refresh</span>
+              <span>Retry</span>
+            </button>
           </div>
         ) : studios.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-space-xl rounded-xl bg-surface-container-lowest text-center border border-surface-container-high my-space-md">

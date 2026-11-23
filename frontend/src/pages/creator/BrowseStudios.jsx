@@ -5,14 +5,25 @@ import * as studioApi from "../../services/studioApi";
 import * as bookingApi from "../../services/bookingApi";
 import { useAuth } from "../../hooks/useAuth";
 
+// Helper for reliable Asia/Kolkata date string (YYYY-MM-DD)
+const getTodayISTString = () => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+};
+
 function BrowseStudios() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getTodayISTString();
 
   const [studios, setStudios] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
   const [maxPrice, setMaxPrice] = useState("");
@@ -31,6 +42,22 @@ function BrowseStudios() {
     }, 3200);
   };
 
+  const loadStudios = () => {
+    setLoading(true);
+    setError("");
+    studioApi
+      .getStudios()
+      .then((data) => {
+        setStudios(data || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err?.message || "Failed to load studios from server.");
+        setStudios([]);
+        setLoading(false);
+      });
+  };
+
   useEffect(() => {
     let active = true;
     studioApi
@@ -41,8 +68,9 @@ function BrowseStudios() {
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (active) {
+          setError(err?.message || "Failed to load studios from server.");
           setStudios([]);
           setLoading(false);
         }
@@ -89,13 +117,37 @@ function BrowseStudios() {
       return;
     }
 
-    const selectedDate = new Date(`${bookingDate}T23:59:59`);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (selectedDate < today) {
+    const todayIST = getTodayISTString();
+    if (bookingDate < todayIST) {
       setBookingError("Booking date cannot be in the past.");
       return;
+    }
+
+    // Check if slot start time is in the past (same-day past time validation)
+    const parseTime = (str) => {
+      const clean = (str || "").trim();
+      const m12 = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (m12) {
+        let h = parseInt(m12[1], 10);
+        const m = parseInt(m12[2], 10);
+        const mer = m12[3].toUpperCase();
+        if (mer === "PM" && h < 12) h += 12;
+        if (mer === "AM" && h === 12) h = 0;
+        return { h, m };
+      }
+      const m24 = clean.match(/^(\d{1,2}):(\d{2})$/);
+      if (m24) return { h: parseInt(m24[1], 10), m: parseInt(m24[2], 10) };
+      return null;
+    };
+
+    const startTime = parseTime(bookingSlot.split("-")[0] || "");
+    if (startTime) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const slotDate = new Date(`${bookingDate}T${pad(startTime.h)}:${pad(startTime.m)}:00+05:30`);
+      if (slotDate < new Date()) {
+        setBookingError("Cannot book a time slot in the past.");
+        return;
+      }
     }
 
     setIsSubmittingBooking(true);
@@ -137,7 +189,7 @@ function BrowseStudios() {
       await bookingApi.createBooking(bookingPayload);
       setIsSubmittingBooking(false);
       setBookingModalOpen(false);
-      showToast("Session Confirmed", `Booked "${selectedStudio.name}" for ${formattedDate}.`);
+      showToast("Booking Request Submitted", `Requested booking for "${selectedStudio.name}" on ${formattedDate}. Pending host approval.`);
       setTimeout(() => {
         navigate("/creator/bookings");
       }, 700);
@@ -247,6 +299,25 @@ function BrowseStudios() {
             <div className="h-80 rounded-xl bg-surface-container-lowest border border-surface-container-high"></div>
             <div className="h-80 rounded-xl bg-surface-container-lowest border border-surface-container-high"></div>
             <div className="h-80 rounded-xl bg-surface-container-lowest border border-surface-container-high"></div>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center p-space-xl rounded-xl bg-surface-container-lowest border border-error-container/40 text-center">
+            <div className="w-16 h-16 rounded-full bg-error-container/20 border border-error-container/30 flex items-center justify-center text-error mb-space-md">
+              <span className="material-symbols-outlined text-[32px]">sync_problem</span>
+            </div>
+            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface mb-1">
+              Failed to load studios
+            </h3>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-sm mb-space-md">
+              {error}
+            </p>
+            <button
+              className="px-space-md py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface font-label-sm text-label-sm uppercase tracking-wider transition-colors cursor-pointer"
+              onClick={loadStudios}
+              type="button"
+            >
+              Retry
+            </button>
           </div>
         ) : filteredStudios.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-space-xl rounded-xl bg-surface-container-lowest border border-surface-container-high text-center">

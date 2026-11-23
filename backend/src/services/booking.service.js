@@ -197,52 +197,108 @@ async function getBookingById(id) {
   });
 }
 
-// Update booking status (CONFIRMED, REJECTED, COMPLETED)
-async function updateBookingStatus(id, newStatus) {
-  const updated = await prisma.booking.update({
-    where: {
-      id: id
-    },
-    data: {
-      status: newStatus
-    },
-    include: {
-      studio: true,
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+// Update booking status (CONFIRMED, REJECTED, COMPLETED) with concurrency-safe row-locking check
+async function updateBookingStatus(id, newStatus, expectedCurrentStatus) {
+  return await prisma.$transaction(async (tx) => {
+    // Acquire pessimistic row-level lock on the booking row to serialize concurrent status updates
+    const rows = await tx.$queryRaw`SELECT id, status FROM "Booking" WHERE id = ${id}::uuid FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      const err = new Error(`Booking with id ${id} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    const current = rows[0];
+
+    if (expectedCurrentStatus && current.status !== expectedCurrentStatus) {
+      const err = new Error(
+        `Booking status conflict: current status is ${current.status}, expected ${expectedCurrentStatus}. Another request has already changed the status.`
+      );
+      err.status = 409;
+      throw err;
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: id },
+      data: { status: newStatus },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
-  });
+    });
 
-  return formatBooking(updated);
+    return formatBooking(updated);
+  });
 }
 
-// Cancel booking (creator action)
-async function cancelBooking(id) {
-  const updated = await prisma.booking.update({
-    where: {
-      id: id
-    },
-    data: {
-      status: "CANCELLED"
-    },
-    include: {
-      studio: true,
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+// Cancel booking (creator action) with concurrency-safe row-locking check
+async function cancelBooking(id, creatorId, expectedCurrentStatus) {
+  return await prisma.$transaction(async (tx) => {
+    // Acquire pessimistic row-level lock on the booking row to serialize concurrent cancel/status requests
+    const rows = await tx.$queryRaw`SELECT id, "creatorId", status FROM "Booking" WHERE id = ${id}::uuid FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      const err = new Error(`Booking with id ${id} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    const current = rows[0];
+
+    if (creatorId && current.creatorId !== creatorId) {
+      const err = new Error("Unauthorized: You can only cancel your own bookings.");
+      err.status = 403;
+      throw err;
+    }
+
+    if (expectedCurrentStatus && current.status !== expectedCurrentStatus) {
+      const err = new Error(
+        `Booking status conflict: current status is ${current.status}, expected ${expectedCurrentStatus}. Another request has already changed the status.`
+      );
+      err.status = 409;
+      throw err;
+    }
+
+    if (current.status === "CANCELLED") {
+      const err = new Error("This booking has already been cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    if (current.status === "COMPLETED") {
+      const err = new Error("Completed bookings cannot be cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    if (current.status === "REJECTED") {
+      const err = new Error("Rejected bookings cannot be cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    const updated = await tx.booking.update({
+      where: { id: id },
+      data: { status: "CANCELLED" },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
-  });
+    });
 
-  return formatBooking(updated);
+    return formatBooking(updated);
+  });
 }
 
 module.exports = {

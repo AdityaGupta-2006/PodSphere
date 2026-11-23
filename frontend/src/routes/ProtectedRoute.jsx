@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -6,6 +7,8 @@ function ProtectedRoute({ children, allowedRoles }) {
   const { user, isAuthenticated, loading, hasProviderAccess, activateProviderAccess, switchWorkspace } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [activationError, setActivationError] = useState("");
+  const [isActivating, setIsActivating] = useState(false);
 
   if (loading) {
     return (
@@ -26,8 +29,16 @@ function ProtectedRoute({ children, allowedRoles }) {
 
   if (allowedRoles && allowedRoles.includes("provider") && !hasProviderAccess) {
     const handleActivate = async () => {
-      await activateProviderAccess();
-      navigate("/provider/dashboard", { replace: true });
+      setIsActivating(true);
+      setActivationError("");
+      try {
+        await activateProviderAccess();
+        setIsActivating(false);
+        navigate("/provider/dashboard", { replace: true });
+      } catch (err) {
+        setIsActivating(false);
+        setActivationError(err.message || "Failed to activate provider access. Please verify backend connection.");
+      }
     };
 
     const handleReturnCreator = () => {
@@ -78,18 +89,26 @@ function ProtectedRoute({ children, allowedRoles }) {
               </div>
             </div>
 
+            {activationError && (
+              <div className="w-full mb-space-md p-3 rounded-xl bg-error-container/20 border border-error-container text-error font-body-sm text-left">
+                {activationError}
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row items-center gap-space-sm w-full sm:w-auto">
               <button
                 type="button"
                 onClick={handleActivate}
-                className="w-full sm:w-auto px-space-lg h-[42px] bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm font-medium rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isActivating}
+                className="w-full sm:w-auto px-space-lg h-[42px] bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm font-medium rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[18px]">verified</span>
-                <span>Activate Provider Access</span>
+                <span>{isActivating ? "Activating..." : "Activate Provider Access"}</span>
               </button>
               <button
                 type="button"
                 onClick={handleReturnCreator}
+                disabled={isActivating}
                 className="w-full sm:w-auto px-space-md h-[42px] bg-surface-container hover:bg-surface-container-high text-on-surface font-body-sm font-medium rounded-xl transition-colors cursor-pointer"
               >
                 Return to Creator Workspace

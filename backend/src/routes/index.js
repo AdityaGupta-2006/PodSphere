@@ -4,6 +4,7 @@ const prisma = require("../db");
 const authRoutes = require("./auth.routes");
 const studioRoutes = require("./studio.routes");
 const bookingRoutes = require("./booking.routes");
+const providerRoutes = require("./provider.routes");
 
 // Health check endpoint
 router.get("/health", async (req, res) => {
@@ -29,5 +30,6 @@ router.get("/health", async (req, res) => {
 router.use("/auth", authRoutes);
 router.use("/studios", studioRoutes);
 router.use("/bookings", bookingRoutes);
+router.use("/provider", providerRoutes);
 
 module.exports = router;

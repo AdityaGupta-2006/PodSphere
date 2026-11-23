@@ -13,29 +13,60 @@ function ProviderBookings() {
   const [bookings, setBookings] = useState([]);
   const [studios, setStudios] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [selectedBookingDetails, setSelectedBookingDetails] = useState(null);
   const [actionError, setActionError] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 5;
 
+  const loadData = () => {
+    setLoading(true);
+    setError("");
+    const studioFilterParam = user?.id ? { providerId: user.id } : {};
+
+    Promise.all([studioApi.getStudios(studioFilterParam), bookingApi.getProviderBookings()])
+      .then(([sData, bData]) => {
+        const myStudios = sData || [];
+        setStudios(myStudios);
+
+        // In API mode, bData is already scoped to provider's studios.
+        // In demo mode or fallback, also filter by owned studios.
+        const myStudioIds = new Set(myStudios.map((s) => String(s.id)));
+        const myBookings = (bData || []).filter((b) =>
+          myStudios.length === 0 || myStudioIds.has(String(b.studioId))
+        );
+        setBookings(bData && bData.length > 0 ? bData : myBookings);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load incoming provider bookings.");
+        setBookings([]);
+        setStudios([]);
+        setLoading(false);
+      });
+  };
+
   useEffect(() => {
     let active = true;
     const studioFilterParam = user?.id ? { providerId: user.id } : {};
 
-    Promise.all([studioApi.getStudios(studioFilterParam), bookingApi.getBookings()])
+    Promise.all([studioApi.getStudios(studioFilterParam), bookingApi.getProviderBookings()])
       .then(([sData, bData]) => {
         if (active) {
           const myStudios = sData || [];
           setStudios(myStudios);
 
           const myStudioIds = new Set(myStudios.map((s) => String(s.id)));
-          const myBookings = (bData || []).filter((b) => myStudioIds.has(String(b.studioId)));
-          setBookings(myBookings);
+          const myBookings = (bData || []).filter((b) =>
+            myStudios.length === 0 || myStudioIds.has(String(b.studioId))
+          );
+          setBookings(bData && bData.length > 0 ? bData : myBookings);
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (active) {
+          setError(err.message || "Failed to load incoming provider bookings.");
           setBookings([]);
           setStudios([]);
           setLoading(false);
@@ -66,6 +97,21 @@ function ProviderBookings() {
       }
     } catch (err) {
       setActionError(err.message || "Failed to confirm booking.");
+    }
+  };
+
+  const handleRejectRequest = async (id) => {
+    setActionError("");
+    try {
+      await bookingApi.updateBookingStatus(id, "REJECTED");
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: "REJECTED" } : b))
+      );
+      if (selectedBookingDetails && selectedBookingDetails.id === id) {
+        setSelectedBookingDetails((prev) => ({ ...prev, status: "REJECTED" }));
+      }
+    } catch (err) {
+      setActionError(err.message || "Failed to reject booking.");
     }
   };
 
@@ -258,6 +304,26 @@ function ProviderBookings() {
               <div className="h-12 bg-surface-container rounded"></div>
             </div>
           </div>
+        ) : error ? (
+          <div className="w-full bg-surface-container-low rounded-lg p-space-xl flex flex-col items-center justify-center text-center shadow-sm border border-error-container/40">
+            <div className="w-16 h-16 rounded-full bg-error-container/20 border border-error-container/30 flex items-center justify-center mb-space-md text-error">
+              <span className="material-symbols-outlined text-[32px]">sync_problem</span>
+            </div>
+            <h3 className="font-headline-sm text-headline-sm font-semibold text-on-surface mb-1">
+              Failed to load bookings
+            </h3>
+            <p className="font-body-md text-body-md text-on-surface-variant max-w-sm mb-space-lg">
+              {error}
+            </p>
+            <button
+              className="inline-flex items-center gap-2 px-space-md h-9 bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high rounded-lg font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
+              onClick={loadData}
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Retry</span>
+            </button>
+          </div>
         ) : studios.length === 0 ? (
           <div className="w-full bg-surface-container-low rounded-lg p-space-xl flex flex-col items-center justify-center text-center shadow-sm">
             <div className="w-16 h-16 rounded-xl bg-surface-container flex items-center justify-center mb-space-md text-outline">
@@ -378,14 +444,24 @@ function ProviderBookings() {
                       </td>
                       <td className="py-space-md px-space-md text-right">
                         {b.status === "PENDING" ? (
-                          <button
-                            className="inline-flex items-center gap-1 px-space-sm py-1 rounded bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
-                            onClick={() => handleConfirmRequest(b.id)}
-                            type="button"
-                          >
-                            <span>Confirm session</span>
-                            <span className="material-symbols-outlined text-[14px]">check</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
+                              onClick={() => handleConfirmRequest(b.id)}
+                              type="button"
+                            >
+                              <span>Confirm</span>
+                              <span className="material-symbols-outlined text-[14px]">check</span>
+                            </button>
+                            <button
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-error-container/20 hover:bg-error-container/30 text-error font-body-sm text-body-sm font-medium transition-colors cursor-pointer"
+                              onClick={() => handleRejectRequest(b.id)}
+                              type="button"
+                            >
+                              <span>Reject</span>
+                              <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                          </div>
                         ) : (
                           <button
                             className="inline-flex items-center gap-1 text-on-surface-variant hover:text-on-surface font-body-sm text-body-sm transition-colors cursor-pointer"
@@ -486,13 +562,22 @@ function ProviderBookings() {
                   Close
                 </button>
                 {selectedBookingDetails.status === "PENDING" && (
-                  <button
-                    className="px-space-md py-1.5 rounded-lg bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm font-medium transition-colors cursor-pointer"
-                    onClick={() => handleConfirmRequest(selectedBookingDetails.id)}
-                    type="button"
-                  >
-                    Confirm Booking
-                  </button>
+                  <>
+                    <button
+                      className="px-space-md py-1.5 rounded-lg bg-error-container/20 hover:bg-error-container/30 text-error font-body-sm font-medium transition-colors cursor-pointer"
+                      onClick={() => handleRejectRequest(selectedBookingDetails.id)}
+                      type="button"
+                    >
+                      Reject Request
+                    </button>
+                    <button
+                      className="px-space-md py-1.5 rounded-lg bg-primary-container hover:bg-secondary-container text-on-primary-container font-body-sm font-medium transition-colors cursor-pointer"
+                      onClick={() => handleConfirmRequest(selectedBookingDetails.id)}
+                      type="button"
+                    >
+                      Confirm Booking
+                    </button>
+                  </>
                 )}
                 {selectedBookingDetails.status === "CONFIRMED" && (
                   <button

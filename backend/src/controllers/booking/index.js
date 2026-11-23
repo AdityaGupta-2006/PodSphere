@@ -1,6 +1,6 @@
 const bookingService = require("../../services/booking.service");
 const studioService = require("../../services/studio.service");
-const { parseTimeSlot } = require("../../utils/time");
+const { parseTimeSlot, isValidCalendarDate } = require("../../utils/time");
 
 // Create studio booking: POST /api/bookings
 async function createBooking(req, res, next) {
@@ -20,7 +20,12 @@ async function createBooking(req, res, next) {
       return res.status(400).json({ error: "Time slot is required." });
     }
 
-    // 2. Validate booking date is not in the past (in Indian local context)
+    // 2. Validate calendar date format & rollover (YYYY-MM-DD)
+    if (!isValidCalendarDate(rawDate.trim())) {
+      return res.status(400).json({ error: "Invalid calendar date format or date does not exist. Use YYYY-MM-DD." });
+    }
+
+    // Validate booking date is not in the past (in Indian local context)
     const selectedDate = new Date(`${rawDate.trim()}T23:59:59+05:30`);
     const now = new Date();
     if (selectedDate < now) {
@@ -33,20 +38,25 @@ async function createBooking(req, res, next) {
       return res.status(400).json({ error: "Invalid time slot format. Example: '10:00 AM - 12:00 PM' or '14:00 - 16:00'" });
     }
 
-    // 4. Verify target studio exists in PostgreSQL
+    // 4. Reject past start times (including same-day past slots)
+    if (parsedSlot.startTime < now) {
+      return res.status(400).json({ error: "Cannot book a time slot in the past." });
+    }
+
+    // 5. Verify target studio exists in PostgreSQL
     const studio = await studioService.getStudioById(studioId.trim());
     if (!studio) {
       return res.status(404).json({ error: `Studio with id ${studioId} not found` });
     }
 
-    // 5. Calculate total amount
+    // 6. Calculate total amount
     const hourlyRate = Number(studio.hourlyRate);
     const totalAmount = hourlyRate * parsedSlot.durationHours;
 
-    // 6. Creator identity is strictly derived from verified JWT
+    // 7. Creator identity is strictly derived from verified JWT
     const creatorId = req.user.id;
 
-    // 7. Execute reservation inside row-locked transaction
+    // 8. Execute reservation inside row-locked transaction
     const newBooking = await bookingService.createBookingWithLock({
       studioId: studio.id,
       creatorId: creatorId,
@@ -175,14 +185,17 @@ async function updateStatus(req, res, next) {
       return res.status(400).json({ error: "Confirmed bookings can only transition to COMPLETED." });
     }
 
-    // 4. Update status in database
-    const updated = await bookingService.updateBookingStatus(id, targetStatus);
+    // 4. Update status in database atomically verifying current status
+    const updated = await bookingService.updateBookingStatus(id, targetStatus, currentStatus);
 
     return res.status(200).json({
       success: true,
       booking: updated
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }
@@ -216,14 +229,17 @@ async function cancelBooking(req, res, next) {
       return res.status(400).json({ error: "Rejected bookings cannot be cancelled." });
     }
 
-    // 4. Cancel booking
-    const updated = await bookingService.cancelBooking(id);
+    // 4. Cancel booking atomically with row-level concurrency protection
+    const updated = await bookingService.cancelBooking(id, req.user.id, booking.status);
 
     return res.status(200).json({
       success: true,
       booking: updated
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }

@@ -2,41 +2,49 @@ const bcrypt = require("bcrypt");
 const authService = require("../../services/auth.service");
 const { generateToken } = require("../../utils/jwt");
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // User Registration Handler: POST /api/auth/register
 async function register(req, res, next) {
   try {
     const { name, email, password, role } = req.body;
 
-    // 1. Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required." });
+    // 1. Validate required fields and types
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Name is required and must be a valid string." });
     }
 
-    // 2. Validate password length
-    if (typeof password !== "string" || password.trim().length < 6) {
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "Email is required and must be a valid string." });
+    }
+
+    if (!password || typeof password !== "string" || password.trim().length < 6) {
       return res.status(400).json({ error: "Password must be at least 6 characters long." });
     }
 
-    // 3. Normalize email
+    // 2. Validate email format
     const normalizedEmail = email.trim().toLowerCase();
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ error: "Please provide a valid email address." });
+    }
 
-    // 4. Check for existing user with duplicate email
+    // 3. Check for existing user with duplicate email
     const existingUser = await authService.findUserByEmail(normalizedEmail);
     if (existingUser) {
       return res.status(409).json({ error: "An account with this email already exists." });
     }
 
-    // 5. Determine target role
+    // 4. Determine target role
     let targetRole = "USER";
-    if (role && (role === "PROVIDER" || role.toLowerCase() === "provider")) {
+    if (role && typeof role === "string" && (role === "PROVIDER" || role.toLowerCase() === "provider")) {
       targetRole = "PROVIDER";
     }
 
-    // 6. Hash password with bcrypt (10 rounds)
+    // 5. Hash password with bcrypt (10 rounds)
     const saltRounds = 10;
     const passwordHash = await bcrypt.hash(password.trim(), saltRounds);
 
-    // 7. Create user in database
+    // 6. Create user in database
     const newUser = await authService.createUser({
       name: name.trim(),
       email: normalizedEmail,
@@ -44,14 +52,14 @@ async function register(req, res, next) {
       role: targetRole
     });
 
-    // 8. Sign JWT token
+    // 7. Sign JWT token
     const token = generateToken({
       userId: newUser.id,
       email: newUser.email,
       role: newUser.role
     });
 
-    // 9. Return token and sanitized user
+    // 8. Return token and sanitized user
     return res.status(201).json({
       token: token,
       user: authService.formatUserResponse(newUser)
@@ -66,8 +74,12 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    // 1. Validate required fields
-    if (!email || !password) {
+    // 1. Validate required fields and types
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "Email and password are required." });
+    }
+
+    if (!password || typeof password !== "string" || !password.trim()) {
       return res.status(400).json({ error: "Email and password are required." });
     }
 

@@ -69,7 +69,7 @@ Create a `.env` file inside the `backend/` directory based on `.env.example`:
 
 ```env
 PORT=5001
-CLIENT_URL="http://localhost:5173"
+CLIENT_URL="http://localhost:5174"
 DATABASE_URL="postgresql://username:password@localhost:5432/podsphere"
 JWT_SECRET="podsphere_jwt_super_secret_key_2026"
 ```
@@ -77,7 +77,7 @@ JWT_SECRET="podsphere_jwt_super_secret_key_2026"
 | Variable | Description | Default / Example |
 | :--- | :--- | :--- |
 | `PORT` | Port for the Express server (set to 5001 to avoid macOS AirPlay conflict on 5000) | `5001` |
-| `CLIENT_URL` | Allowed frontend origin for CORS | `http://localhost:5173` |
+| `CLIENT_URL` | Allowed frontend origin for CORS (Vite ports 5173, 5174, 5175 are also whitelisted) | `http://localhost:5174` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/podsphere` |
 | `JWT_SECRET` | Secret key used to sign and verify authentication tokens | String (>= 32 chars recommended) |
 
@@ -102,6 +102,17 @@ JWT_SECRET="podsphere_jwt_super_secret_key_2026"
    npx prisma migrate status
    ```
 
+4. **Seed Realistic Demo Data (Evaluation Demo)**:
+   Populate 10 realistic Indian podcast studios, provider hosts, and sample bookings:
+   ```bash
+   npm run seed
+   ```
+
+   **Demo Accounts**:
+   - **Provider 1 (Delhi/Gurugram)**: `delhi.host@podsphere.demo` / `DemoHost123!`
+   - **Provider 2 (Noida/Bengaluru)**: `noida.host@podsphere.demo` / `DemoHost123!`
+   - **Creator**: `creator.demo@podsphere.demo` / `DemoCreator123!`
+
 ---
 
 ## 💻 Running the Server
@@ -122,7 +133,7 @@ When running, the server listens at `http://localhost:5001` (API endpoints prefi
 
 ## 🧪 Running Automated Tests
 
-The backend includes a comprehensive native test suite with **69 assertions** covering happy paths, edge cases, error codes, and concurrency race conditions:
+The backend includes a comprehensive native test suite with **82 assertions** covering happy paths, edge cases, error codes, and concurrency race conditions:
 
 ```bash
 npm test
@@ -256,7 +267,7 @@ All requests and responses use `Content-Type: application/json`. Protected endpo
 - **Success Response** (`200 OK`): Array of studio objects.
 
 #### `GET /api/studios/:id`
-- **Access**: Public
+- **Access**: Public *(Note: To protect host privacy, `provider.email` is omitted in public unauthenticated requests; it is only included if the request is authenticated and authorized as the owning studio host).*
 - **Success Response** (`200 OK`):
   ```json
   {
@@ -272,8 +283,7 @@ All requests and responses use `Content-Type: application/json`. Protected endpo
       "imageUrl": "https://...",
       "provider": {
         "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-        "name": "Studio Host",
-        "email": "host@example.com"
+        "name": "Studio Host"
       }
     }
   }
@@ -400,11 +410,18 @@ All requests and responses use `Content-Type: application/json`. Protected endpo
 - On retrieval, `Intl.DateTimeFormat` with `timeZone: "Asia/Kolkata"` guarantees consistent local formatting regardless of where the server or client is hosted.
 
 ### 3. Concurrency & Conflict Prevention
-- To prevent simultaneous double-booking of a studio, the reservation creation logic is executed inside an interactive Prisma transaction with PostgreSQL row locking:
+- **Slot Reservation Double-Booking Prevention**:
+  To prevent simultaneous double-booking of a studio, the reservation creation logic is executed inside an interactive Prisma transaction with PostgreSQL row locking:
   ```sql
   SELECT id FROM "Studio" WHERE id = :studioId::uuid FOR UPDATE;
   ```
-- This serializes concurrent booking requests for that specific studio, eliminating race conditions while allowing concurrent bookings across different studios.
+  This serializes concurrent booking requests for that specific studio, eliminating race conditions and returning `HTTP 409 Conflict` on overlap.
+- **Atomic Booking Status Transitions & Cancellations**:
+  To prevent concurrent status transition races (e.g., host confirming/rejecting while creator cancels, or duplicate status updates), state changes are serialized using row-level locking:
+  ```sql
+  SELECT id, status FROM "Booking" WHERE id = :id::uuid FOR UPDATE;
+  ```
+  If another request has already transitioned the status away from the expected current state, the operation is rejected immediately with `HTTP 409 Conflict`. All five lifecycle statuses (`PENDING`, `CONFIRMED`, `REJECTED`, `CANCELLED`, `COMPLETED`) are strictly enforced.
 
 ### 4. Dual-Mode Architecture
 - **Demo Mode (`VITE_USE_API="false"`)**: Operates entirely in browser `localStorage` using pre-seeded studios and bookings.

@@ -323,7 +323,13 @@ async function runSystemTests() {
     const stDetails = await fetch(`${baseUrl}/studios/${studio1Id}`);
     const stDetailsData = await stDetails.json();
     assert(stDetails.status === 200, "GET /api/studios/:id returns 200 OK");
-    assert(stDetailsData.studio.provider.email === "sys_provider1@test.com", "Studio details include provider relation");
+    assert(!stDetailsData.studio.provider.email, "Public unauthenticated GET /api/studios/:id does not expose provider email");
+
+    const stAuthDetails = await fetch(`${baseUrl}/studios/${studio1Id}`, {
+      headers: { "Authorization": `Bearer ${provider1Token}` }
+    });
+    const stAuthDetailsData = await stAuthDetails.json();
+    assert(stAuthDetailsData.studio.provider.email === "sys_provider1@test.com", "Authorized studio host GET /api/studios/:id includes provider email");
 
     // Malformed ID
     const stMalformed = await fetch(`${baseUrl}/studios/not-a-valid-uuid`);
@@ -526,6 +532,206 @@ async function runSystemTests() {
       headers: { "Authorization": `Bearer ${creator1Token}` }
     });
     assert(cancelCompleted.status === 400, "Attempt to cancel COMPLETED booking rejected with 400 Bad Request");
+
+    // Concurrent Status Race Condition: Two concurrent status transitions on the same booking
+    console.log("\n  --> Testing Concurrent Status Transition Race Condition...");
+    const bkRaceSetup = await (await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio1Id, rawDate: "2027-11-28", time: "10:00 AM - 12:00 PM" })
+    })).json();
+    const raceBookingId = bkRaceSetup.booking.id;
+
+    const [statusRace1, statusRace2] = await Promise.all([
+      fetch(`${baseUrl}/bookings/${raceBookingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+        body: JSON.stringify({ status: "CONFIRMED" })
+      }),
+      fetch(`${baseUrl}/bookings/${raceBookingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+        body: JSON.stringify({ status: "REJECTED" })
+      })
+    ]);
+    const sRaceCodes = [statusRace1.status, statusRace2.status].sort();
+    assert(sRaceCodes[0] === 200 && (sRaceCodes[1] === 409 || sRaceCodes[1] === 400), "Concurrent status updates serialized safely with row lock (one 200, one conflict)");
+
+    // Concurrent Creator Cancel vs Host Confirm Race Condition
+    console.log("\n  --> Testing Concurrent Cancel vs Confirm Race Condition...");
+    const bkRaceSetup2 = await (await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio1Id, rawDate: "2027-11-29", time: "10:00 AM - 12:00 PM" })
+    })).json();
+    const raceBookingId2 = bkRaceSetup2.booking.id;
+
+    const [raceCancel, raceConfirm] = await Promise.all([
+      fetch(`${baseUrl}/bookings/${raceBookingId2}/cancel`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${creator1Token}` }
+      }),
+      fetch(`${baseUrl}/bookings/${raceBookingId2}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+        body: JSON.stringify({ status: "CONFIRMED" })
+      })
+    ]);
+    const cancelConfirmCodes = [raceCancel.status, raceConfirm.status].sort();
+    assert(cancelConfirmCodes[0] === 200 && (cancelConfirmCodes[1] === 409 || cancelConfirmCodes[1] === 400), "Concurrent cancel vs confirm serialized safely (one 200, one conflict)");
+
+    // CORS Origin Enforcement Check
+    console.log("\n  --> Testing CORS Origin Enforcement...");
+    const corsEvil = await fetch(`${baseUrl}/studios`, {
+      headers: { "Origin": "http://evil.com" }
+    });
+    assert(corsEvil.status === 403, "CORS rejects unauthorized origin with 403 Forbidden");
+
+    const corsGood = await fetch(`${baseUrl}/studios`, {
+      headers: { "Origin": "http://localhost:5174" }
+    });
+    assert(corsGood.status === 200, "CORS allows configured Vite origin (http://localhost:5174)");
+
+    // Asia/Kolkata Date Formatting Check
+    const todayIST = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(todayIST), "Asia/Kolkata date format produces valid YYYY-MM-DD");
+
+    // ==========================================
+    // 5. EXTENDED STABILIZATION & EDGE CASES
+    // ==========================================
+    console.log("\n5. Edge Cases & Reliability Hardening");
+
+    // Invalid non-string or malformed email registration
+    const regInvalidEmail = await fetch(`${baseUrl}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test User", email: "notanemail", password: "password123" })
+    });
+    assert(regInvalidEmail.status === 400, "Registration rejects malformed email with 400 Bad Request");
+
+    // Studio creation rejects Infinity hourlyRate
+    const studioInfRate = await fetch(`${baseUrl}/studios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({
+        name: "Infinity Studio",
+        city: "Delhi",
+        address: "Test Address",
+        hourlyRate: "Infinity",
+        description: "Test description"
+      })
+    });
+    assert(studioInfRate.status === 400, "Studio creation rejects non-finite rate with 400 Bad Request");
+
+    // Public studio listing does NOT expose provider email
+    const pubStudios = await fetch(`${baseUrl}/studios`);
+    const pubStudiosData = await pubStudios.json();
+    const hasExposedEmail = Array.isArray(pubStudiosData) && pubStudiosData.some(s => s.provider && s.provider.email);
+    assert(!hasExposedEmail, "Security: Public studio list never exposes provider email");
+
+    // Booking rejects nonexistent calendar date (e.g. 2026-02-31)
+    const bookingBadCal = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2026-02-31",
+        time: "10:00 AM - 12:00 PM"
+      })
+    });
+    assert(bookingBadCal.status === 400, "Booking rejects invalid calendar date 2026-02-31 with 400 Bad Request");
+
+    // Booking rejects out-of-range hours (13:30 PM)
+    const bookingBadHour = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2026-12-15",
+        time: "13:30 PM - 15:30 PM"
+      })
+    });
+    assert(bookingBadHour.status === 400, "Booking rejects out-of-range 12h hour (13:30 PM) with 400 Bad Request");
+
+    // Booking rejects out-of-range minutes (10:99 AM)
+    const bookingBadMin = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2026-12-15",
+        time: "10:99 AM - 12:00 PM"
+      })
+    });
+    assert(bookingBadMin.status === 400, "Booking rejects out-of-range minutes (10:99 AM) with 400 Bad Request");
+
+    // Booking rejects out-of-range 24h hour (25:00 - 27:00)
+    const bookingBad24 = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2026-12-15",
+        time: "25:00 - 27:00"
+      })
+    });
+    assert(bookingBad24.status === 400, "Booking rejects out-of-range 24h format (25:00) with 400 Bad Request");
+
+    // Booking rejects same-day past time slot
+    const todayYMD = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    const bookingSameDayPast = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: todayYMD,
+        time: "00:00 - 01:00"
+      })
+    });
+    assert(bookingSameDayPast.status === 400, "Booking rejects same-day past time slot with 400 Bad Request");
+
+    // Provider rejects a PENDING booking
+    const booking3Res = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2026-12-20",
+        time: "10:00 AM - 12:00 PM"
+      })
+    });
+    const booking3Data = await booking3Res.json();
+    const booking3Id = booking3Data.booking.id;
+
+    const statusReject = await fetch(`${baseUrl}/bookings/${booking3Id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "REJECTED" })
+    });
+    const statusRejectData = await statusReject.json();
+    assert(statusReject.status === 200, "Provider rejects booking with 200 OK");
+    assert(statusRejectData.booking.status === "REJECTED", "Booking status successfully transitioned to REJECTED");
+
+    // Rejected booking is terminal
+    const rejectTerminal = await fetch(`${baseUrl}/bookings/${booking3Id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "CONFIRMED" })
+    });
+    assert(rejectTerminal.status === 400, "Attempt to alter REJECTED terminal booking rejected with 400 Bad Request");
+
+    // Studio deletion blocked when historical bookings exist (e.g. COMPLETED or CANCELLED)
+    const deleteStudioWithHistory = await fetch(`${baseUrl}/studios/${studio1Id}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${provider1Token}` }
+    });
+    assert(deleteStudioWithHistory.status === 400, "Studio deletion blocked when historical bookings exist (400 Bad Request)");
+
+    // Dedicated provider router endpoint returns 200 OK
+    const provConsoleRes = await fetch(`${baseUrl}/provider/bookings`, {
+      headers: { "Authorization": `Bearer ${provider1Token}` }
+    });
+    assert(provConsoleRes.status === 200, "GET /api/provider/bookings returns 200 OK");
 
     // Clean up test data
     await prisma.booking.deleteMany({

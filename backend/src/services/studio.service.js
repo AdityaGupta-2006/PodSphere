@@ -31,14 +31,14 @@ function formatStudio(studio) {
           provider: {
             id: studio.provider.id,
             name: studio.provider.name,
-            email: studio.provider.email
+            ...(studio.provider.email ? { email: studio.provider.email } : {})
           }
         }
       : {})
   };
 }
 
-// Fetch studios matching optional filters
+// Fetch studios matching optional filters (public listing omits provider email)
 async function getAllStudios(filters = {}) {
   const where = {};
 
@@ -78,8 +78,7 @@ async function getAllStudios(filters = {}) {
       provider: {
         select: {
           id: true,
-          name: true,
-          email: true
+          name: true
         }
       }
     },
@@ -191,24 +190,25 @@ async function hasActiveBookings(studioId) {
   return count > 0;
 }
 
-// Delete a studio from PostgreSQL (and any associated non-active booking history)
+// Check if a studio has any bookings at all (including historical completed/cancelled/rejected)
+async function hasBookingHistory(studioId) {
+  if (!isValidUuid(studioId)) return false;
+
+  const count = await prisma.booking.count({
+    where: {
+      studioId: studioId
+    }
+  });
+
+  return count > 0;
+}
+
+// Delete a studio from PostgreSQL without purging historical booking records
 async function deleteStudio(id) {
-  return await prisma.$transaction(async (tx) => {
-    // Clean up any historical bookings for this studio to satisfy foreign key constraint
-    await tx.booking.deleteMany({
-      where: {
-        studioId: id
-      }
-    });
-
-    // Delete the studio record
-    await tx.studio.delete({
-      where: {
-        id: id
-      }
-    });
-
-    return true;
+  return await prisma.studio.delete({
+    where: {
+      id: id
+    }
   });
 }
 
@@ -220,5 +220,6 @@ module.exports = {
   createStudio,
   updateStudio,
   hasActiveBookings,
+  hasBookingHistory,
   deleteStudio
 };

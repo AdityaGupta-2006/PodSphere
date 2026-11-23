@@ -11,7 +11,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/AdityaGupta-2006/PodSphere?style=for-the-badge&logo=github&color=8B5CF6)](https://github.com/AdityaGupta-2006/PodSphere/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/AdityaGupta-2006/PodSphere?style=for-the-badge&logo=github&color=6366F1)](https://github.com/AdityaGupta-2006/PodSphere/forks)
 [![License](https://img.shields.io/badge/License-Academic-EC4899?style=for-the-badge)](#-license)
-[![Status](https://img.shields.io/badge/Status-In%20Development-F59E0B?style=for-the-badge)](#-roadmap)
+[![Status](https://img.shields.io/badge/Status-Evaluation%20Ready-10B981?style=for-the-badge)](#-roadmap)
 
 <br/>
 
@@ -185,7 +185,7 @@ Tools for studio providers to manage facilities and bookings:
 
 To prevent double-booking a studio for the same time window:
 * **Frontend (Implemented):** In standalone demo mode, client-side validation checks existing local bookings for the selected studio and blocks duplicate reservations for identical dates and time slots.
-* **Backend (In Progress):** Server-side transaction validation to enforce concurrency checks against the PostgreSQL database is currently under development.
+* **Backend (Implemented):** Server-side transaction validation enforces concurrency checks against the PostgreSQL database using pessimistic row locking (`SELECT ... FOR UPDATE`), serializing concurrent booking requests and returning HTTP 409 Conflict if an overlap occurs. Concurrency protection also guards status changes and cancellations.
 
 ```text
 Creator selects studio, date & time slot
@@ -227,7 +227,22 @@ Creator selects studio, date & time slot
 └───────────┘ └─────────────┘
 ```
 
-> **Note on Booking Statuses:** The frontend demo interface implements all five status states (*Pending*, *Confirmed*, *Rejected*, *Cancelled*, *Completed*). The existing database schema enum currently defines three states (`CONFIRMED`, `CANCELLED`, `COMPLETED`); extending the schema to include `PENDING` and `REJECTED` is part of the ongoing backend development.
+#### Status Transition Rules:
+- **`PENDING`**: Initial booking state created by a creator. Can transition to `CONFIRMED` or `REJECTED` by the studio host, or `CANCELLED` by the creator.
+- **`CONFIRMED`**: Host approved the session. Can transition to `COMPLETED` by the host once the session finishes, or `CANCELLED` by the creator.
+- **`REJECTED`**: Host declined the request. This is a terminal state.
+- **`CANCELLED`**: Creator withdrew the session. This is a terminal state.
+- **`COMPLETED`**: Session successfully finished. This is a terminal state.
+- **Atomic Concurrency Protection**: All status updates and cancellations execute inside PostgreSQL transactions with row-level locks (`SELECT id, status FROM "Booking" WHERE id = :id::uuid FOR UPDATE`). If another request modifies the status concurrently, the server safely responds with `HTTP 409 Conflict`.
+
+#### 💳 Booking Fee Display & Payment Scope Limitations:
+- **UI Status Badge Derivation**: The frontend displays mock payment badge labels mapped directly from the booking lifecycle status:
+  - `PENDING` ➔ `"HOLD PENDING"`
+  - `CONFIRMED` ➔ `"PAID ESCROW"`
+  - `COMPLETED` ➔ `"SETTLED"`
+  - `CANCELLED` ➔ `"REFUNDED"`
+  - `REJECTED` ➔ `"REJECTED"`
+- **No Real Payment Processing or Escrow**: PodSphere is an academic capstone prototype. **No real payment gateway (such as Razorpay or Stripe), bank transfer integration, card processing, or financial escrow holding exists in the platform.** All monetary numbers represent calculated studio rental prices (hourly rate × booking duration), and all payment badges are purely cosmetic UI indicators reflecting the reservation's lifecycle status.
 
 ### 🛡️ Edge Cases & Implementation Status
 
@@ -236,8 +251,8 @@ Creator selects studio, date & time slot
 * [x] **Client-Side Provider Activation:** Creators can activate provider tools directly in the UI without a separate registration.
 * [x] **Action Safeguards:** Confirmation modal dialogs prevent accidental deletion of studio listings or cancellation of bookings.
 * [x] **Responsive Viewport & Scrolling:** Accessible custom scrollbars and modal containers preventing content clipping on small screens.
-* [ ] **Backend Conflict Enforcement (In Progress):** Database-level transaction checks to prevent concurrent duplicate bookings on the server.
-* [ ] **Backend Authorization Middleware (In Progress):** Server-side JWT token and role validation on Express API endpoints.
+* [x] **Backend Conflict Enforcement:** Database-level pessimistic row locking (`SELECT ... FOR UPDATE`) preventing concurrent duplicate bookings and atomic status updates returning 409 Conflict on race conditions.
+* [x] **Backend Authorization Middleware:** Server-side JWT token and role validation on Express API endpoints with strict host ownership verification and provider privacy protection.
 
 ---
 
@@ -270,7 +285,7 @@ PodSphere follows a modular full-stack architecture:
                        ┌─────────────────────────┐
                        │     Express Backend     │
                        │       (Node.js)         │
-                       │     [IN PROGRESS]       │
+                       │     [IMPLEMENTED]       │
                        │                         │
                        │  • Auth & JWT Routes    │
                        │  • Studio Controllers   │
@@ -283,7 +298,7 @@ PodSphere follows a modular full-stack architecture:
                                     ▼
                        ┌─────────────────────────┐
                        │   PostgreSQL Database   │
-                       │     [SCHEMA READY]      │
+                       │     [OPERATIONAL]       │
                        │                         │
                        │  • Users Table          │
                        │  • Studios Table        │
@@ -293,11 +308,11 @@ PodSphere follows a modular full-stack architecture:
 
 ### Frontend vs Backend Status
 
-* **Frontend (Implemented):** Built with React 19, Vite, React Router 7, and Tailwind CSS. All creator and provider views, modals, filters, and forms are fully interactive.
-* **Backend (In Progress):** The Express structure in `backend/src/` contains initial scaffolding (route stubs, controller skeletons, middleware stubs, and utility helpers). The business logic and database-connected endpoints are currently being developed.
+* **Frontend (Implemented):** Built with React 19, Vite, React Router 7, and Tailwind CSS. All creator and provider views, modals, filters, and forms are fully interactive with accurate `Asia/Kolkata` date and slot handling.
+* **Backend (Implemented):** Complete Express 5 REST API in `backend/src/` with PostgreSQL persistence via Prisma ORM, stateless JWT authentication, pessimistic row locking (`SELECT FOR UPDATE`) for double-booking and concurrent status transitions, strict CORS whitelist enforcement, and comprehensive automated test coverage.
 * **Dual-Mode Client:**
-  * **Standalone Mode (`VITE_USE_API=false`):** Runs the frontend using browser local storage and pre-seeded mock studio/booking data. This allows complete UI testing without needing a running backend server or PostgreSQL database.
-  * **API Mode (`VITE_USE_API=true`):** Configured to dispatch HTTP requests to the Express backend endpoints once backend implementation is completed.
+  * **Standalone Mode (`VITE_USE_API=false`):** Runs the frontend using browser local storage and pre-seeded mock studio/booking data.
+  * **API Mode (`VITE_USE_API=true`):** Connects to the Express backend (`http://localhost:5001/api`) with full PostgreSQL persistence.
 
 ---
 
@@ -386,21 +401,22 @@ PodSphere/
 ├── backend/
 │   ├── prisma/
 │   │   ├── migrations/
-│   │   └── schema.prisma           # Prisma PostgreSQL schema
+│   │   ├── schema.prisma           # Prisma PostgreSQL schema
+│   │   └── seed.js                 # Idempotent demo seed script
 │   ├── src/
-│   │   ├── config/                 # Environment configurations
-│   │   ├── controllers/            # Controller skeletons (in progress)
-│   │   ├── middleware/             # Middleware stubs (in progress)
-│   │   ├── prisma/                 # Prisma database client instance
-│   │   ├── routes/                 # Route stubs (in progress)
-│   │   ├── services/               # Service skeletons (in progress)
-│   │   ├── utils/                  # Utility helpers
-│   │   ├── validators/             # Validation skeletons (in progress)
-│   │   ├── app.js                  # Express app definition
+│   │   ├── config/                 # Environment configurations & validation
+│   │   ├── controllers/            # Request handlers (auth, studio, booking)
+│   │   ├── middleware/             # Auth, role authorization, CORS, and error handlers
+│   │   ├── routes/                 # Express REST endpoint declarations
+│   │   ├── services/               # Business logic, transactions & row locking
+│   │   ├── utils/                  # IST time conversion and JWT helpers
+│   │   ├── db.js                   # Prisma client instance with PostgreSQL adapter
+│   │   ├── app.js                  # Express app configuration & CORS setup
 │   │   └── server.js               # Express server entry point
+│   ├── tests/
+│   │   └── system.test.js          # Native end-to-end system test suite (85+ assertions)
 │   ├── .env.example                # Backend environment template
-│   ├── package.json
-│   └── prisma7.config.ts           # Prisma configuration
+│   └── package.json
 │
 ├── frontend/
 │   ├── public/
@@ -487,7 +503,7 @@ Start the frontend development server:
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`.
+The application will be available at `http://localhost:5174` (or `http://localhost:5173`).
 
 ---
 
@@ -503,18 +519,17 @@ npm install
 Create a `.env` file in the `backend` directory:
 
 ```env
-PORT=5000
+PORT=5001
+CLIENT_URL="http://localhost:5174"
 DATABASE_URL="postgresql://username:password@localhost:5432/podsphere"
-JWT_SECRET="your_jwt_secret_key"
+JWT_SECRET="podsphere_jwt_super_secret_key_2026"
 ```
-
-> **macOS Port Tip:** On macOS, port 5000 is often reserved by AirPlay Receiver (ControlCenter). If you encounter port conflicts, set `PORT=5001` in `backend/.env` and update `VITE_API_URL=http://localhost:5001/api` in `frontend/.env`.
 
 ---
 
-### 4️⃣ Database Setup (PostgreSQL + Prisma)
+### 4️⃣ Database Setup & Realistic Demo Seeding
 
-Ensure your local PostgreSQL service is running, then run Prisma commands from inside the `backend` directory:
+Ensure your local PostgreSQL service is running on port 5432, then run Prisma and the seed script from inside `backend/`:
 
 ```bash
 # Generate the Prisma client
@@ -522,25 +537,30 @@ npx prisma generate
 
 # Push the schema to your PostgreSQL database
 npx prisma db push
+
+# Seed 10 realistic Indian podcast studios and demo accounts
+npm run seed
 ```
+
+#### 🔑 Pre-Configured Demo Credentials:
+
+| Role | Email | Password | Coverage & Capabilities |
+| :--- | :--- | :--- | :--- |
+| **Provider 1** | `delhi.host@podsphere.demo` | `DemoHost123!` | Manages Delhi NCR & Gurugram studios; confirm/reject bookings |
+| **Provider 2** | `noida.host@podsphere.demo` | `DemoHost123!` | Manages Noida, Mumbai & Bengaluru studios; complete sessions |
+| **Creator** | `creator.demo@podsphere.demo` | `DemoCreator123!` | Explores 10 studios, filters by city/price, books future sessions |
 
 ---
 
 ### 5️⃣ Start the Backend Server
 
-To start the backend server directly:
+To start the backend server with automatic restart on file changes:
 
 ```bash
-node src/server.js
+npm run dev
 ```
 
-Or using `nodemon` for auto-restart during development:
-
-```bash
-npx nodemon src/server.js
-```
-
-> **Backend Status:** The server runs on port 5001 with active health check at `http://localhost:5001/api/health`. All authentication, studio management, and booking endpoints are fully operational.
+The server listens at `http://localhost:5001` with API routes prefixed by `/api`. Verify live status at `http://localhost:5001/api/health`.
 
 ---
 
@@ -562,12 +582,12 @@ npm run build
 
 ### Backend Verification
 
-Run the comprehensive 69-assertion automated test suite in the `backend` directory:
+Run the comprehensive 88-assertion automated test suite in the `backend` directory:
 
 ```bash
 cd backend
 
-# Execute complete system tests (Health, Auth, Studios, Bookings, Concurrency)
+# Execute complete system tests (Health, Auth, Studios, Bookings, Concurrency, CORS, IST dates)
 npm test
 ```
 

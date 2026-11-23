@@ -349,20 +349,18 @@ export async function updateStudio(id, studioData) {
 }
 
 export async function deleteStudio(id, providerId) {
-  const allBookings = await getBookings();
-  const activeBookings = allBookings.filter(
-    (b) => String(b.studioId) === String(id) && (b.status === "CONFIRMED" || b.status === "PENDING")
-  );
-
-  if (activeBookings.length > 0) {
-    const error = new Error("A studio with active or scheduled bookings cannot be deleted.");
-    error.status = 400;
-    throw error;
-  }
-
   if (isApiMode) {
     await request(`/studios/${id}`, { method: "DELETE" });
     return { success: true };
+  }
+
+  const allBookings = await getBookings();
+  const hasHistory = allBookings.some((b) => String(b.studioId) === String(id));
+
+  if (hasHistory) {
+    const error = new Error("A studio with existing or historical bookings cannot be deleted.");
+    error.status = 400;
+    throw error;
   }
 
   const userStudios = getUserStudios();

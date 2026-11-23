@@ -5,8 +5,12 @@
   "main": "src/server.js",
   "scripts": {
     "test": "node tests/system.test.js",
+    "seed": "node prisma/seed.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "keywords": [],
   "author": "",

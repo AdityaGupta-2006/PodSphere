@@ -1,4 +1,5 @@
 const studioService = require("../../services/studio.service");
+const { verifyToken } = require("../../utils/jwt");
 
 // List all studios with optional filtering: GET /api/studios
 async function listStudios(req, res, next) {
@@ -19,6 +20,7 @@ async function listStudios(req, res, next) {
 }
 
 // Get single studio details: GET /api/studios/:id
+// Public by default: provider email is only exposed if the request is authenticated and authorized as the studio host
 async function getStudio(req, res, next) {
   try {
     const { id } = req.params;
@@ -29,7 +31,29 @@ async function getStudio(req, res, next) {
       return res.status(404).json({ error: `Studio with id ${id} not found` });
     }
 
-    return res.status(200).json({ studio });
+    // Check if caller is authenticated and authorized as the studio host
+    let isAuthorizedHost = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const decoded = verifyToken(token);
+        if (decoded && decoded.userId === studio.providerId) {
+          isAuthorizedHost = true;
+        }
+      } catch {
+        // Token invalid or expired - treat as unauthenticated
+      }
+    }
+
+    // Do not expose provider email through public studio details unless authenticated and authorized
+    const studioResponse = { ...studio };
+    if (!isAuthorizedHost && studioResponse.provider) {
+      const { email, ...safeProvider } = studioResponse.provider;
+      studioResponse.provider = safeProvider;
+    }
+
+    return res.status(200).json({ studio: studioResponse });
   } catch (err) {
     next(err);
   }
@@ -54,7 +78,7 @@ async function createStudio(req, res, next) {
     }
 
     const rate = Number(hourlyRate);
-    if (isNaN(rate) || rate <= 0) {
+    if (!Number.isFinite(rate) || isNaN(rate) || rate <= 0) {
       return res.status(400).json({ error: "Hourly rate must be a valid positive number." });
     }
 
@@ -62,12 +86,15 @@ async function createStudio(req, res, next) {
       return res.status(400).json({ error: "Studio description is required." });
     }
 
-    // 2. Normalize gear / equipment array
-    const gearList = Array.isArray(gear)
+    // 2. Normalize gear / equipment array (filter empty entries)
+    const rawGear = Array.isArray(gear)
       ? gear
       : Array.isArray(equipment)
       ? equipment
       : [];
+    const gearList = rawGear
+      .map((g) => (typeof g === "string" ? g.trim() : ""))
+      .filter(Boolean);
 
     // 3. Derive provider identity strictly from verified JWT
     const providerId = req.user.id;
@@ -80,7 +107,7 @@ async function createStudio(req, res, next) {
       hourlyRate: rate,
       description: description.trim(),
       gear: gearList,
-      imageUrl: imageUrl || null,
+      imageUrl: typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null,
       providerId: providerId
     });
 
@@ -116,28 +143,44 @@ async function updateStudio(req, res, next) {
       return res.status(400).json({ error: "Studio name cannot be empty." });
     }
 
+    if (city !== undefined && (typeof city !== "string" || !city.trim())) {
+      return res.status(400).json({ error: "Studio city cannot be empty." });
+    }
+
+    if (address !== undefined && (typeof address !== "string" || !address.trim())) {
+      return res.status(400).json({ error: "Studio address cannot be empty." });
+    }
+
+    if (description !== undefined && (typeof description !== "string" || !description.trim())) {
+      return res.status(400).json({ error: "Studio description cannot be empty." });
+    }
+
     if (hourlyRate !== undefined) {
       const rate = Number(hourlyRate);
-      if (isNaN(rate) || rate <= 0) {
+      if (!Number.isFinite(rate) || isNaN(rate) || rate <= 0) {
         return res.status(400).json({ error: "Hourly rate must be a valid positive number." });
       }
     }
 
-    const gearList = Array.isArray(gear)
+    const rawGear = Array.isArray(gear)
       ? gear
       : Array.isArray(equipment)
       ? equipment
       : undefined;
 
+    const gearList = rawGear
+      ? rawGear.map((g) => (typeof g === "string" ? g.trim() : "")).filter(Boolean)
+      : undefined;
+
     // 4. Update studio in database
     const updatedStudio = await studioService.updateStudio(id, {
-      name,
-      city,
-      address,
-      hourlyRate,
-      description,
+      name: name !== undefined ? name.trim() : undefined,
+      city: city !== undefined ? city.trim() : undefined,
+      address: address !== undefined ? address.trim() : undefined,
+      hourlyRate: hourlyRate !== undefined ? Number(hourlyRate) : undefined,
+      description: description !== undefined ? description.trim() : undefined,
       gear: gearList,
-      imageUrl
+      imageUrl: imageUrl !== undefined ? (typeof imageUrl === "string" && imageUrl.trim() ? imageUrl.trim() : null) : undefined
     });
 
     return res.status(200).json({
@@ -165,10 +208,10 @@ async function deleteStudio(req, res, next) {
       return res.status(403).json({ error: "Unauthorized: You can only delete your own studios." });
     }
 
-    // 3. Active bookings check
-    const hasBookings = await studioService.hasActiveBookings(id);
-    if (hasBookings) {
-      return res.status(400).json({ error: "A studio with active or scheduled bookings cannot be deleted." });
+    // 3. Historical and active bookings check: preserve booking history
+    const hasHistory = await studioService.hasBookingHistory(id);
+    if (hasHistory) {
+      return res.status(400).json({ error: "A studio with existing or historical bookings cannot be deleted." });
     }
 
     // 4. Delete studio

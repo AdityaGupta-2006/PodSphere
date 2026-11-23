@@ -19,13 +19,15 @@ function ProviderDashboard() {
       const filter = user?.id ? { providerId: user.id } : {};
       const [studioList, allBookingList] = await Promise.all([
         studioApi.getStudios(filter),
-        bookingApi.getBookings(),
+        bookingApi.getProviderBookings(),
       ]);
       const myStudios = studioList || [];
       const myStudioIds = new Set(myStudios.map((s) => String(s.id)));
-      const myBookings = (allBookingList || []).filter((b) => myStudioIds.has(String(b.studioId)));
+      const myBookings = (allBookingList || []).filter((b) =>
+        myStudios.length === 0 || myStudioIds.has(String(b.studioId))
+      );
       setStudios(myStudios);
-      setBookings(myBookings);
+      setBookings(allBookingList && allBookingList.length > 0 ? allBookingList : myBookings);
       setLoading(false);
     } catch (err) {
       setError(err?.message || "Unable to load provider dashboard data.");
@@ -38,14 +40,16 @@ function ProviderDashboard() {
   useEffect(() => {
     let active = true;
     const filter = user?.id ? { providerId: user.id } : {};
-    Promise.all([studioApi.getStudios(filter), bookingApi.getBookings()])
+    Promise.all([studioApi.getStudios(filter), bookingApi.getProviderBookings()])
       .then(([studioList, allBookingList]) => {
         if (active) {
           const myStudios = studioList || [];
           const myStudioIds = new Set(myStudios.map((s) => String(s.id)));
-          const myBookings = (allBookingList || []).filter((b) => myStudioIds.has(String(b.studioId)));
+          const myBookings = (allBookingList || []).filter((b) =>
+            myStudios.length === 0 || myStudioIds.has(String(b.studioId))
+          );
           setStudios(myStudios);
-          setBookings(myBookings);
+          setBookings(allBookingList && allBookingList.length > 0 ? allBookingList : myBookings);
           setLoading(false);
         }
       })
