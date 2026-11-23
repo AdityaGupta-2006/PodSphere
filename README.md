@@ -57,7 +57,7 @@ Creators can discover listed studios and reserve recording slots, while studio p
 
 Developed as a **Semester 3 college project**, PodSphere focuses on building a functional, intuitive full-stack web application with clean separation between Creator and Provider workflows.
 
-> **Project Status Notice:** The frontend user interface is fully interactive and functional in standalone client mode using local storage. The backend REST APIs, JWT middleware, and PostgreSQL database integration are currently under active development.
+> **Project Status Notice:** The application is fully functional end-to-end. It features dual-mode architecture supporting both standalone client-side demo mode (using browser local storage) and full-stack REST API mode powered by Express, PostgreSQL, and Prisma with JWT authentication.
 
 ---
 
@@ -540,7 +540,7 @@ Or using `nodemon` for auto-restart during development:
 npx nodemon src/server.js
 ```
 
-> **Backend Status:** The server currently returns a health check at `http://localhost:5000/`. Business API routes are under active development.
+> **Backend Status:** The server runs on port 5001 with active health check at `http://localhost:5001/api/health`. All authentication, studio management, and booking endpoints are fully operational.
 
 ---
 
@@ -562,7 +562,14 @@ npm run build
 
 ### Backend Verification
 
-Automated test suites (`npm test`) are not yet configured for the backend (currently returns `Error: no test specified`). End-to-end integration and API test scripts are planned for Phase 07.
+Run the comprehensive 69-assertion automated test suite in the `backend` directory:
+
+```bash
+cd backend
+
+# Execute complete system tests (Health, Auth, Studios, Bookings, Concurrency)
+npm test
+```
 
 ---
 
@@ -590,33 +597,34 @@ Studio Discovery & Management (Frontend)
 ├── Provider studio listing CRUD (Create, Edit, Delete in client state)
 └── Studio details modal with capacity & gear lists
 
-PHASE 04 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
+PHASE 04 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
 Booking System & Conflict Prevention
 ├── Interactive date & slot picker (Frontend UI: ✅)
 ├── Client-side slot overlap check (Frontend demo: ✅)
 ├── Creator personal booking history & cancellation (Frontend UI: ✅)
 ├── Provider booking status actions (Frontend UI: ✅)
-└── Backend database conflict enforcement (Backend: 🚧)
+└── Backend database conflict enforcement via row locking (Backend: ✅)
 
-PHASE 05 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
+PHASE 05 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
 Backend API Implementation
 ├── Express REST API routes & controllers
 ├── JWT authentication & authorization middleware
-├── Input validation schemas
-└── Prisma database service layer
+├── Input validation schemas & Indian timezone handling
+└── Prisma database service layer (PostgreSQL)
 
-PHASE 06 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
+PHASE 06 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
 Frontend-Backend Integration
 ├── Connect frontend API service to Express endpoints
-├── Switch VITE_USE_API to live backend mode
+├── Seamless toggle via VITE_USE_API (demo vs API mode)
 ├── API error handling & network status alerts
-└── End-to-end booking transactions
+└── End-to-end booking transactions with PENDING status
 
-PHASE 07 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🔜
-Testing & Final Deployment
-├── Backend test suite configuration
-├── Production build verification
-└── Project presentation and review
+PHASE 07 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
+Testing & Final Delivery
+├── 69-assertion automated backend test suite (npm test)
+├── Concurrency race condition verification (Promise.all)
+├── Production build verification (npm run build)
+└── Complete API documentation and guides
 ```
 
 ---

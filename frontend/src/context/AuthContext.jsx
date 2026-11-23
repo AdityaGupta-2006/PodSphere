@@ -112,9 +112,24 @@ export function AuthProvider({ children }) {
 
   const activateProviderAccess = async () => {
     if (!user) return null;
+
+    let backendUser = null;
+    try {
+      const res = await authApi.activateProvider();
+      if (res && res.user) {
+        backendUser = res.user;
+        if (res.token) {
+          setToken(res.token);
+          localStorage.setItem("podsphere_token", res.token);
+        }
+      }
+    } catch (err) {
+      void err;
+    }
+
     const currentRoles = Array.isArray(user.roles) ? user.roles : [user.role || "creator"];
     const updatedRoles = Array.from(new Set([...currentRoles, "provider", "creator"]));
-    const updatedUser = {
+    const updatedUser = backendUser || {
       ...user,
       role: "provider",
       roles: updatedRoles,

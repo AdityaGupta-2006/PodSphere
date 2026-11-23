@@ -2,8 +2,7 @@
 // Learn more: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -33,6 +32,7 @@ model Studio {
   address     String
   hourlyRate  Decimal  @db.Decimal(10, 2)
   gear        String[] @default([])
+  imageUrl    String?
 
   provider User      @relation(fields: [providerId], references: [id])
   bookings Booking[]
@@ -50,7 +50,7 @@ model Booking {
   startTime   DateTime
   endTime     DateTime
   totalAmount Decimal       @db.Decimal(10, 2)
-  status      BookingStatus @default(CONFIRMED)
+  status      BookingStatus @default(PENDING)
 
   creator User @relation(fields: [creatorId], references: [id], onDelete: Restrict)
 
@@ -70,7 +70,9 @@ enum Role {
 }
 
 enum BookingStatus {
+  PENDING
   CONFIRMED
+  REJECTED
   CANCELLED
   COMPLETED
 }

@@ -3,9 +3,12 @@ import { request } from "./api.js";
 const USER_BOOKINGS_STORAGE_KEY = "podsphere_user_bookings";
 const MODIFIED_BOOKINGS_STORAGE_KEY = "podsphere_modified_bookings";
 const isApiMode =
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  import.meta.env.VITE_USE_API === "true";
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_USE_API === "true") ||
+  (typeof globalThis.process !== "undefined" &&
+    globalThis.process.env &&
+    globalThis.process.env.VITE_USE_API === "true");
 
 const DEMO_BOOKINGS = [
   {

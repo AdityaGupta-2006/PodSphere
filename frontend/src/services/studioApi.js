@@ -5,9 +5,12 @@ const USER_STUDIOS_STORAGE_KEY = "podsphere_user_studios";
 const DELETED_DEMO_STUDIOS_KEY = "podsphere_deleted_demo_studios";
 const MODIFIED_DEMO_STUDIOS_KEY = "podsphere_modified_demo_studios";
 const isApiMode =
-  typeof import.meta !== "undefined" &&
-  import.meta.env &&
-  import.meta.env.VITE_USE_API === "true";
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.VITE_USE_API === "true") ||
+  (typeof globalThis.process !== "undefined" &&
+    globalThis.process.env &&
+    globalThis.process.env.VITE_USE_API === "true");
 
 const DEMO_STUDIOS = [
   {
