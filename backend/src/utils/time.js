@@ -10,6 +10,8 @@ function parseSingleTimeString(timeStr) {
     const minutes = parseInt(match12[2], 10);
     const meridian = match12[3].toUpperCase();
 
+    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+
     if (meridian === "PM" && hours < 12) hours += 12;
     if (meridian === "AM" && hours === 12) hours = 0;
 
@@ -21,6 +23,7 @@ function parseSingleTimeString(timeStr) {
   if (match24) {
     const hours = parseInt(match24[1], 10);
     const minutes = parseInt(match24[2], 10);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
     return { hours, minutes };
   }
 
@@ -30,7 +33,19 @@ function parseSingleTimeString(timeStr) {
 // Parse a slot string e.g. "10:00 AM - 12:00 PM" or "14:00 - 16:00" on a given rawDate (YYYY-MM-DD)
 // Treats input as Indian Standard Time (Asia/Kolkata: UTC+05:30) and returns UTC Date objects
 function parseTimeSlot(rawDate, timeRangeStr) {
-  if (!rawDate || !timeRangeStr || typeof timeRangeStr !== "string") return null;
+  if (!rawDate || !timeRangeStr || typeof timeRangeStr !== "string" || typeof rawDate !== "string") return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate.trim())) return null;
+
+  const [year, month, day] = rawDate.trim().split("-").map(Number);
+  const testDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    testDate.getUTCFullYear() !== year ||
+    testDate.getUTCMonth() !== month - 1 ||
+    testDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
 
   const parts = timeRangeStr.split("-");
   if (parts.length !== 2) return null;
@@ -41,8 +56,8 @@ function parseTimeSlot(rawDate, timeRangeStr) {
   if (!startParsed || !endParsed) return null;
 
   const pad = (n) => String(n).padStart(2, "0");
-  const startIso = `${rawDate}T${pad(startParsed.hours)}:${pad(startParsed.minutes)}:00+05:30`;
-  const endIso = `${rawDate}T${pad(endParsed.hours)}:${pad(endParsed.minutes)}:00+05:30`;
+  const startIso = `${rawDate.trim()}T${pad(startParsed.hours)}:${pad(startParsed.minutes)}:00+05:30`;
+  const endIso = `${rawDate.trim()}T${pad(endParsed.hours)}:${pad(endParsed.minutes)}:00+05:30`;
 
   const startTime = new Date(startIso);
   const endTime = new Date(endIso);

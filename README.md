@@ -185,7 +185,7 @@ Tools for studio providers to manage facilities and bookings:
 
 To prevent double-booking a studio for the same time window:
 * **Frontend (Implemented):** In standalone demo mode, client-side validation checks existing local bookings for the selected studio and blocks duplicate reservations for identical dates and time slots.
-* **Backend (In Progress):** Server-side transaction validation to enforce concurrency checks against the PostgreSQL database is currently under development.
+* **Backend (Implemented):** Server-side concurrency checks using pessimistic row locking (`FOR UPDATE`) inside PostgreSQL transactions serialize reservation requests and prevent double-booking.
 
 ```text
 Creator selects studio, date & time slot
@@ -227,7 +227,7 @@ Creator selects studio, date & time slot
 └───────────┘ └─────────────┘
 ```
 
-> **Note on Booking Statuses:** The frontend demo interface implements all five status states (*Pending*, *Confirmed*, *Rejected*, *Cancelled*, *Completed*). The existing database schema enum currently defines three states (`CONFIRMED`, `CANCELLED`, `COMPLETED`); extending the schema to include `PENDING` and `REJECTED` is part of the ongoing backend development.
+> **Note on Booking Statuses:** Both the frontend and backend implement all five status states (*Pending*, *Confirmed*, *Rejected*, *Cancelled*, *Completed*). Status transitions follow strict lifecycle validation with database row-level locks. Note: Payment status labels such as "PAID ESCROW" or "HOLD PENDING" displayed in the UI are simulated status badges for demonstration purposes only; no real payment processing or escrow service is integrated.
 
 ### 🛡️ Edge Cases & Implementation Status
 
@@ -236,8 +236,9 @@ Creator selects studio, date & time slot
 * [x] **Client-Side Provider Activation:** Creators can activate provider tools directly in the UI without a separate registration.
 * [x] **Action Safeguards:** Confirmation modal dialogs prevent accidental deletion of studio listings or cancellation of bookings.
 * [x] **Responsive Viewport & Scrolling:** Accessible custom scrollbars and modal containers preventing content clipping on small screens.
-* [ ] **Backend Conflict Enforcement (In Progress):** Database-level transaction checks to prevent concurrent duplicate bookings on the server.
-* [ ] **Backend Authorization Middleware (In Progress):** Server-side JWT token and role validation on Express API endpoints.
+* [x] **Backend Conflict Enforcement:** Database-level transaction checks with row-level locking (`FOR UPDATE`) prevent concurrent duplicate bookings on the server.
+* [x] **Backend Authorization Middleware:** Server-side JWT token and role validation on Express API endpoints.
+* [ ] **Real Payment Gateway Integration (Planned):** Integration with real payment gateways (e.g., Stripe, Razorpay) and escrow infrastructure (currently simulated via UI badges).
 
 ---
 
@@ -270,12 +271,12 @@ PodSphere follows a modular full-stack architecture:
                        ┌─────────────────────────┐
                        │     Express Backend     │
                        │       (Node.js)         │
-                       │     [IN PROGRESS]       │
+                       │     [IMPLEMENTED]       │
                        │                         │
                        │  • Auth & JWT Routes    │
                        │  • Studio Controllers   │
                        │  • Booking Controllers  │
-                       │  • Conflict Middleware  │
+                       │  • Concurrency Locks    │
                        └────────────┬────────────┘
                                     │
                                 Prisma ORM
@@ -283,7 +284,7 @@ PodSphere follows a modular full-stack architecture:
                                     ▼
                        ┌─────────────────────────┐
                        │   PostgreSQL Database   │
-                       │     [SCHEMA READY]      │
+                       │     [IMPLEMENTED]       │
                        │                         │
                        │  • Users Table          │
                        │  • Studios Table        │
@@ -294,10 +295,10 @@ PodSphere follows a modular full-stack architecture:
 ### Frontend vs Backend Status
 
 * **Frontend (Implemented):** Built with React 19, Vite, React Router 7, and Tailwind CSS. All creator and provider views, modals, filters, and forms are fully interactive.
-* **Backend (In Progress):** The Express structure in `backend/src/` contains initial scaffolding (route stubs, controller skeletons, middleware stubs, and utility helpers). The business logic and database-connected endpoints are currently being developed.
+* **Backend (Implemented):** Built with Node.js, Express, Prisma ORM, and PostgreSQL. Features JWT authentication, role authorization, atomic booking status transitions, pessimistic concurrency locking, and studio soft-deletion.
 * **Dual-Mode Client:**
   * **Standalone Mode (`VITE_USE_API=false`):** Runs the frontend using browser local storage and pre-seeded mock studio/booking data. This allows complete UI testing without needing a running backend server or PostgreSQL database.
-  * **API Mode (`VITE_USE_API=true`):** Configured to dispatch HTTP requests to the Express backend endpoints once backend implementation is completed.
+  * **API Mode (`VITE_USE_API=true`):** Configured to dispatch live HTTP requests to the Express backend endpoints with full PostgreSQL database persistence.
 
 ---
 
@@ -389,13 +390,12 @@ PodSphere/
 │   │   └── schema.prisma           # Prisma PostgreSQL schema
 │   ├── src/
 │   │   ├── config/                 # Environment configurations
-│   │   ├── controllers/            # Controller skeletons (in progress)
-│   │   ├── middleware/             # Middleware stubs (in progress)
+│   │   ├── controllers/            # Request handlers (auth, studio, booking)
+│   │   ├── middleware/             # JWT auth & error handling middleware
 │   │   ├── prisma/                 # Prisma database client instance
-│   │   ├── routes/                 # Route stubs (in progress)
-│   │   ├── services/               # Service skeletons (in progress)
-│   │   ├── utils/                  # Utility helpers
-│   │   ├── validators/             # Validation skeletons (in progress)
+│   │   ├── routes/                 # Express API route definitions
+│   │   ├── services/               # Database operations & business logic
+│   │   ├── utils/                  # JWT and time parsing utilities
 │   │   ├── app.js                  # Express app definition
 │   │   └── server.js               # Express server entry point
 │   ├── .env.example                # Backend environment template

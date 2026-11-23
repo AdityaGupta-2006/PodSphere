@@ -19,7 +19,7 @@ function ProviderDashboard() {
       const filter = user?.id ? { providerId: user.id } : {};
       const [studioList, allBookingList] = await Promise.all([
         studioApi.getStudios(filter),
-        bookingApi.getBookings(),
+        bookingApi.getBookings({ role: "provider" }),
       ]);
       const myStudios = studioList || [];
       const myStudioIds = new Set(myStudios.map((s) => String(s.id)));
@@ -38,7 +38,7 @@ function ProviderDashboard() {
   useEffect(() => {
     let active = true;
     const filter = user?.id ? { providerId: user.id } : {};
-    Promise.all([studioApi.getStudios(filter), bookingApi.getBookings()])
+    Promise.all([studioApi.getStudios(filter), bookingApi.getBookings({ role: "provider" })])
       .then(([studioList, allBookingList]) => {
         if (active) {
           const myStudios = studioList || [];

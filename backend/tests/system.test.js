@@ -527,6 +527,228 @@ async function runSystemTests() {
     });
     assert(cancelCompleted.status === 400, "Attempt to cancel COMPLETED booking rejected with 400 Bad Request");
 
+    // ==========================================
+    // 5. ROLE-AWARE BOOKINGS & ACTIVATION FAILURE
+    // ==========================================
+    console.log("\n5. Role-Aware Provider Retrieval & Provider Activation Failure");
+
+    // Provider booking retrieval via role=provider
+    const provRoleBookingsRes = await fetch(`${baseUrl}/bookings?role=provider`, {
+      headers: { "Authorization": `Bearer ${provider1Token}` }
+    });
+    assert(provRoleBookingsRes.status === 200, "GET /api/bookings?role=provider returns 200 OK");
+    const provRoleBookings = await provRoleBookingsRes.json();
+    assert(Array.isArray(provRoleBookings) && provRoleBookings.length >= 2, "GET /api/bookings?role=provider returns incoming bookings for provider's studios");
+
+    // Provider activation failure: unauthenticated
+    const actNoToken = await fetch(`${baseUrl}/auth/activate-provider`, {
+      method: "POST"
+    });
+    assert(actNoToken.status === 401, "POST /api/auth/activate-provider without token rejected with 401 Unauthorized");
+
+    // Provider activation failure: malformed / invalid token
+    const actBadToken = await fetch(`${baseUrl}/auth/activate-provider`, {
+      method: "POST",
+      headers: { "Authorization": "Bearer invalid.jwt.token" }
+    });
+    assert(actBadToken.status === 401, "POST /api/auth/activate-provider with invalid token rejected with 401 Unauthorized");
+
+    // ==========================================
+    // 6. PROVIDER REJECTION LIFECYCLE
+    // ==========================================
+    console.log("\n6. Provider Reject Booking Action & Transition Rules");
+
+    // Create a new booking to be rejected
+    const bkToRejectRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio1Id, rawDate: "2027-11-27", time: "10:00 AM - 12:00 PM" })
+    });
+    const bkToRejectData = await bkToRejectRes.json();
+    const rejectBookingId = bkToRejectData.booking.id;
+    assert(bkToRejectRes.status === 201, "Created booking for rejection test");
+
+    // Provider rejects the pending booking
+    const rejectRes = await fetch(`${baseUrl}/bookings/${rejectBookingId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "REJECTED" })
+    });
+    const rejectData = await rejectRes.json();
+    assert(rejectRes.status === 200, "Provider rejects booking with 200 OK");
+    assert(rejectData.booking.status === "REJECTED", "Booking status successfully transitioned to REJECTED");
+
+    // Creator cannot cancel an already rejected booking
+    const cancelRejectedRes = await fetch(`${baseUrl}/bookings/${rejectBookingId}/cancel`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${creator1Token}` }
+    });
+    assert(cancelRejectedRes.status === 400, "Creator cannot cancel a REJECTED booking (400 Bad Request)");
+
+    // Terminal status check: REJECTED booking cannot transition further
+    const rejTransitionRes = await fetch(`${baseUrl}/bookings/${rejectBookingId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "CONFIRMED" })
+    });
+    assert(rejTransitionRes.status === 400, "REJECTED booking cannot transition to CONFIRMED (400 Bad Request)");
+
+    // ==========================================
+    // 7. SAME-DAY PAST-TIME BOOKING & INPUT VALIDATION
+    // ==========================================
+    console.log("\n7. Same-Day Past-Time Booking & Strict Input Validation");
+
+    // Determine today's date in IST format (YYYY-MM-DD)
+    const todayIST = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+
+    // Booking a slot on today's date that has already passed (e.g. 00:00 - 01:00)
+    const pastSlotRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: todayIST,
+        time: "00:00 - 01:00"
+      })
+    });
+    assert(pastSlotRes.status === 400, "Booking a past time slot on today's date rejected with 400 Bad Request");
+    const pastSlotData = await pastSlotRes.json();
+    assert(pastSlotData.error.includes("Booking start time must be in the future."), "Error message confirms start time must be in the future");
+
+    // Invalid calendar date format
+    const badDateRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "not-a-date",
+        time: "10:00 AM - 12:00 PM"
+      })
+    });
+    assert(badDateRes.status === 400, "Booking with malformed date format rejected with 400 Bad Request");
+
+    // Impossible calendar date (Feb 31)
+    const impossibleDateRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({
+        studioId: studio1Id,
+        rawDate: "2027-02-31",
+        time: "10:00 AM - 12:00 PM"
+      })
+    });
+    assert(impossibleDateRes.status === 400, "Booking with non-existent calendar date rejected with 400 Bad Request");
+
+    // ==========================================
+    // 8. ATOMIC STATUS TRANSITIONS UNDER CONCURRENCY
+    // ==========================================
+    console.log("\n8. Atomic Status Transitions Under Concurrent Requests");
+
+    // Create a new booking for concurrent transition race
+    const atomicBookingRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio1Id, rawDate: "2027-11-28", time: "10:00 AM - 12:00 PM" })
+    });
+    const atomicBookingData = await atomicBookingRes.json();
+    const atomicBookingId = atomicBookingData.booking.id;
+
+    // Fire two conflicting status updates concurrently (CONFIRMED vs REJECTED)
+    const [atom1, atom2] = await Promise.all([
+      fetch(`${baseUrl}/bookings/${atomicBookingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+        body: JSON.stringify({ status: "CONFIRMED" })
+      }),
+      fetch(`${baseUrl}/bookings/${atomicBookingId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+        body: JSON.stringify({ status: "REJECTED" })
+      })
+    ]);
+    const atomicStatuses = [atom1.status, atom2.status].sort();
+    assert(atomicStatuses[0] === 200 && atomicStatuses[1] === 400, "Atomic row lock ensures exactly one status transition succeeds (200) and conflicting one is rejected (400)");
+
+    // ==========================================
+    // 9. STUDIO DELETION & HISTORICAL PRESERVATION
+    // ==========================================
+    console.log("\n9. Studio Soft-Delete / Archival & Historical Preservation");
+
+    // Create Studio 3
+    const st3Res = await fetch(`${baseUrl}/studios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({
+        name: "Archive Test Studio",
+        description: "Studio for testing archival preservation",
+        city: "Delhi",
+        address: "Historical Wing, Sector 5",
+        hourlyRate: 1800,
+        gear: ["Mic A"]
+      })
+    });
+    const st3Data = await st3Res.json();
+    const studio3Id = st3Data.studio.id;
+    assert(st3Res.status === 201, "Created Studio 3 for archival test");
+
+    // Create booking on Studio 3
+    const bk3Res = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio3Id, rawDate: "2027-11-29", time: "10:00 AM - 12:00 PM" })
+    });
+    const bk3Data = await bk3Res.json();
+    const booking3Id = bk3Data.booking.id;
+    assert(bk3Res.status === 201, "Created booking on Studio 3");
+
+    // Complete the booking so it is non-active
+    await fetch(`${baseUrl}/bookings/${booking3Id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "CONFIRMED" })
+    });
+    await fetch(`${baseUrl}/bookings/${booking3Id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provider1Token}` },
+      body: JSON.stringify({ status: "COMPLETED" })
+    });
+
+    // Delete Studio 3 (soft-delete / archive)
+    const delSt3Res = await fetch(`${baseUrl}/studios/${studio3Id}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${provider1Token}` }
+    });
+    assert(delSt3Res.status === 200, "DELETE /api/studios/:id archives studio with 200 OK");
+
+    // Verify Studio 3 is removed from active listings
+    const activeStudios = await (await fetch(`${baseUrl}/studios`)).json();
+    assert(!activeStudios.some(s => s.id === studio3Id), "Archived studio is excluded from public studio listings");
+
+    // Verify Studio 3 cannot be retrieved via getStudioById
+    const getSt3Res = await fetch(`${baseUrl}/studios/${studio3Id}`);
+    assert(getSt3Res.status === 404, "Archived studio returns 404 Not Found on public endpoint");
+
+    // Verify cannot create new bookings on archived studio
+    const bkArchivedRes = await fetch(`${baseUrl}/bookings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${creator1Token}` },
+      body: JSON.stringify({ studioId: studio3Id, rawDate: "2027-11-30", time: "10:00 AM - 12:00 PM" })
+    });
+    assert(bkArchivedRes.status === 404, "Cannot create booking on archived studio (404 Not Found)");
+
+    // Crucial: verify historical booking for Studio 3 is PRESERVED!
+    const histBookingRes = await fetch(`${baseUrl}/bookings/${booking3Id}`, {
+      headers: { "Authorization": `Bearer ${creator1Token}` }
+    });
+    assert(histBookingRes.status === 200, "Historical booking on archived studio is preserved (200 OK)");
+    const histBookingData = await histBookingRes.json();
+    assert(histBookingData.booking.studioName === "Archive Test Studio", "Historical booking still retains studio name and metadata");
+
     // Clean up test data
     await prisma.booking.deleteMany({
       where: { creator: { email: { in: TEST_EMAILS } } }

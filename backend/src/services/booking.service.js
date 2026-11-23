@@ -56,7 +56,12 @@ function formatBooking(booking) {
 async function createBookingWithLock({ studioId, creatorId, startTime, endTime, totalAmount }) {
   return await prisma.$transaction(async (tx) => {
     // 1. Acquire pessimistic row lock on the Studio to serialize concurrent reservation requests
-    await tx.$queryRaw`SELECT id FROM "Studio" WHERE id = ${studioId}::uuid FOR UPDATE`;
+    const studioRows = await tx.$queryRaw`SELECT id, "isArchived" FROM "Studio" WHERE id = ${studioId}::uuid FOR UPDATE`;
+    if (!studioRows || studioRows.length === 0 || studioRows[0].isArchived) {
+      const err = new Error(`Studio with id ${studioId} not found or is no longer available.`);
+      err.status = 404;
+      throw err;
+    }
 
     // 2. Check for overlapping reservations for this studio in active states (PENDING or CONFIRMED)
     const conflict = await tx.booking.findFirst({
@@ -197,52 +202,183 @@ async function getBookingById(id) {
   });
 }
 
-// Update booking status (CONFIRMED, REJECTED, COMPLETED)
-async function updateBookingStatus(id, newStatus) {
-  const updated = await prisma.booking.update({
-    where: {
-      id: id
-    },
-    data: {
-      status: newStatus
-    },
-    include: {
-      studio: true,
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+// Atomically update booking status with pessimistic row lock and lifecycle validation
+async function updateBookingStatusAtomic({ bookingId, targetStatus, providerId }) {
+  if (!isValidUuid(bookingId)) {
+    const err = new Error(`Booking with id ${bookingId} not found`);
+    err.status = 404;
+    throw err;
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Acquire pessimistic row lock on the Booking
+    const rows = await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId}::uuid FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      const err = new Error(`Booking with id ${bookingId} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    // 2. Fetch booking record with relations inside transaction
+    const booking = await tx.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
-  });
+    });
 
-  return formatBooking(updated);
+    if (!booking) {
+      const err = new Error(`Booking with id ${bookingId} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    // 3. Ownership check: verify provider owns the studio for this booking
+    if (providerId && (!booking.studio || booking.studio.providerId !== providerId)) {
+      const err = new Error("Unauthorized: You do not own the studio for this booking.");
+      err.status = 403;
+      throw err;
+    }
+
+    // 4. Lifecycle transition validation
+    const currentStatus = booking.status;
+    if (["REJECTED", "CANCELLED", "COMPLETED"].includes(currentStatus)) {
+      const err = new Error(`Cannot change status of a ${currentStatus} booking.`);
+      err.status = 400;
+      throw err;
+    }
+
+    if (currentStatus === "PENDING" && !["CONFIRMED", "REJECTED"].includes(targetStatus)) {
+      const err = new Error("Pending bookings can only be CONFIRMED or REJECTED.");
+      err.status = 400;
+      throw err;
+    }
+
+    if (currentStatus === "CONFIRMED" && targetStatus !== "COMPLETED") {
+      const err = new Error("Confirmed bookings can only transition to COMPLETED.");
+      err.status = 400;
+      throw err;
+    }
+
+    // 5. Update status
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { status: targetStatus },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    return formatBooking(updated);
+  });
 }
 
-// Cancel booking (creator action)
-async function cancelBooking(id) {
-  const updated = await prisma.booking.update({
-    where: {
-      id: id
-    },
-    data: {
-      status: "CANCELLED"
-    },
-    include: {
-      studio: true,
-      creator: {
-        select: {
-          id: true,
-          name: true,
-          email: true
+// Atomically cancel booking (creator action) with pessimistic row lock and lifecycle validation
+async function cancelBookingAtomic({ bookingId, creatorId }) {
+  if (!isValidUuid(bookingId)) {
+    const err = new Error(`Booking with id ${bookingId} not found`);
+    err.status = 404;
+    throw err;
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Acquire pessimistic row lock on the Booking
+    const rows = await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${bookingId}::uuid FOR UPDATE`;
+    if (!rows || rows.length === 0) {
+      const err = new Error(`Booking with id ${bookingId} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    // 2. Fetch booking record inside transaction
+    const booking = await tx.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
-    }
-  });
+    });
 
-  return formatBooking(updated);
+    if (!booking) {
+      const err = new Error(`Booking with id ${bookingId} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    // 3. Ownership check: verify caller is the creator
+    if (creatorId && booking.creatorId !== creatorId) {
+      const err = new Error("Unauthorized: You can only cancel your own bookings.");
+      err.status = 403;
+      throw err;
+    }
+
+    // 4. Lifecycle transition validation
+    if (booking.status === "CANCELLED") {
+      const err = new Error("This booking has already been cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    if (booking.status === "COMPLETED") {
+      const err = new Error("Completed bookings cannot be cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    if (booking.status === "REJECTED") {
+      const err = new Error("Rejected bookings cannot be cancelled.");
+      err.status = 400;
+      throw err;
+    }
+
+    // 5. Update status
+    const updated = await tx.booking.update({
+      where: { id: bookingId },
+      data: { status: "CANCELLED" },
+      include: {
+        studio: true,
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    return formatBooking(updated);
+  });
+}
+
+// Update booking status (backward-compatibility wrapper)
+async function updateBookingStatus(id, newStatus) {
+  return await updateBookingStatusAtomic({ bookingId: id, targetStatus: newStatus });
+}
+
+// Cancel booking (backward-compatibility wrapper)
+async function cancelBooking(id) {
+  return await cancelBookingAtomic({ bookingId: id });
 }
 
 module.exports = {
@@ -253,5 +389,7 @@ module.exports = {
   getBookingsForProvider,
   getBookingById,
   updateBookingStatus,
-  cancelBooking
+  cancelBooking,
+  updateBookingStatusAtomic,
+  cancelBookingAtomic
 };

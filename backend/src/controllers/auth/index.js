@@ -7,13 +7,23 @@ async function register(req, res, next) {
   try {
     const { name, email, password, role } = req.body;
 
-    // 1. Validate required fields
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Name, email, and password are required." });
+    // 1. Validate required fields and types
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "A valid name string is required." });
     }
 
-    // 2. Validate password length
-    if (typeof password !== "string" || password.trim().length < 6) {
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "A valid email string is required." });
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ error: "A valid email format is required." });
+    }
+
+    // 2. Validate password length and type
+    if (!password || typeof password !== "string" || password.trim().length < 6) {
       return res.status(400).json({ error: "Password must be at least 6 characters long." });
     }
 
@@ -28,7 +38,7 @@ async function register(req, res, next) {
 
     // 5. Determine target role
     let targetRole = "USER";
-    if (role && (role === "PROVIDER" || role.toLowerCase() === "provider")) {
+    if (role && (role === "PROVIDER" || (typeof role === "string" && role.toLowerCase() === "provider"))) {
       targetRole = "PROVIDER";
     }
 
@@ -57,6 +67,9 @@ async function register(req, res, next) {
       user: authService.formatUserResponse(newUser)
     });
   } catch (err) {
+    if (err.code === "P2002") {
+      return res.status(409).json({ error: "An account with this email already exists." });
+    }
     next(err);
   }
 }
@@ -66,9 +79,13 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body;
 
-    // 1. Validate required fields
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required." });
+    // 1. Validate required fields and types
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "A valid email string is required." });
+    }
+
+    if (!password || typeof password !== "string" || !password.trim()) {
+      return res.status(400).json({ error: "A valid password string is required." });
     }
 
     // 2. Find user by normalized email
