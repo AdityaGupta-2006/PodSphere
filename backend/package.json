@@ -10,7 +10,12 @@
     "test:coverage": "jest --coverage --forceExit --detectOpenHandles",
     "lint": "eslint src/**/*.js"
   },
-  "keywords": ["podsphere", "express", "prisma", "api"],
+  "keywords": [
+    "podsphere",
+    "express",
+    "prisma",
+    "api"
+  ],
   "author": "PodSphere Team",
   "license": "ISC",
   "dependencies": {
