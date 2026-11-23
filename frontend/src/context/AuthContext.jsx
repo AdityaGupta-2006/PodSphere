@@ -114,17 +114,18 @@ export function AuthProvider({ children }) {
     if (!user) return null;
 
     let backendUser = null;
-    try {
+    const isApi =
+      (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_USE_API === "true") ||
+      (typeof globalThis.process !== "undefined" && globalThis.process.env && globalThis.process.env.VITE_USE_API === "true");
+
+    if (isApi) {
       const res = await authApi.activateProvider();
-      if (res && res.user) {
-        backendUser = res.user;
-        if (res.token) {
-          setToken(res.token);
-          localStorage.setItem("podsphere_token", res.token);
-        }
+      if (!res || !res.user || !res.token) {
+        throw new Error("Failed to activate provider access on the server.");
       }
-    } catch (err) {
-      void err;
+      backendUser = res.user;
+      setToken(res.token);
+      localStorage.setItem("podsphere_token", res.token);
     }
 
     const currentRoles = Array.isArray(user.roles) ? user.roles : [user.role || "creator"];

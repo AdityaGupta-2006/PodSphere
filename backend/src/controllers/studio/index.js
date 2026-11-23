@@ -154,31 +154,16 @@ async function deleteStudio(req, res, next) {
   try {
     const { id } = req.params;
 
-    // 1. Fetch existing studio
-    const existingStudio = await studioService.getStudioById(id);
-    if (!existingStudio) {
-      return res.status(404).json({ error: `Studio with id ${id} not found` });
-    }
-
-    // 2. Ownership check
-    if (existingStudio.providerId !== req.user.id) {
-      return res.status(403).json({ error: "Unauthorized: You can only delete your own studios." });
-    }
-
-    // 3. Active bookings check
-    const hasBookings = await studioService.hasActiveBookings(id);
-    if (hasBookings) {
-      return res.status(400).json({ error: "A studio with active or scheduled bookings cannot be deleted." });
-    }
-
-    // 4. Delete studio
-    await studioService.deleteStudio(id);
+    await studioService.deleteStudio(id, req.user.id);
 
     return res.status(200).json({
       success: true,
       message: "Studio deleted successfully."
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }

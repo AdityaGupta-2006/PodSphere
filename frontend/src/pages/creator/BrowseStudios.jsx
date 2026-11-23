@@ -137,7 +137,7 @@ function BrowseStudios() {
       await bookingApi.createBooking(bookingPayload);
       setIsSubmittingBooking(false);
       setBookingModalOpen(false);
-      showToast("Session Confirmed", `Booked "${selectedStudio.name}" for ${formattedDate}.`);
+      showToast("Booking Request Submitted", "Pending Provider Confirmation");
       setTimeout(() => {
         navigate("/creator/bookings");
       }, 700);

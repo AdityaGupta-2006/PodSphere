@@ -16,21 +16,35 @@ async function createBooking(req, res, next) {
       return res.status(400).json({ error: "Booking date is required." });
     }
 
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(rawDate.trim())) {
+      return res.status(400).json({ error: "Invalid date format. Expected YYYY-MM-DD." });
+    }
+
+    const [year, month, day] = rawDate.trim().split("-").map(Number);
+    const testDate = new Date(Date.UTC(year, month - 1, day));
+    if (
+      testDate.getUTCFullYear() !== year ||
+      testDate.getUTCMonth() !== month - 1 ||
+      testDate.getUTCDate() !== day
+    ) {
+      return res.status(400).json({ error: "Invalid calendar date." });
+    }
+
     if (!time || typeof time !== "string" || !time.trim()) {
       return res.status(400).json({ error: "Time slot is required." });
     }
 
-    // 2. Validate booking date is not in the past (in Indian local context)
-    const selectedDate = new Date(`${rawDate.trim()}T23:59:59+05:30`);
-    const now = new Date();
-    if (selectedDate < now) {
-      return res.status(400).json({ error: "Booking date cannot be in the past." });
-    }
-
-    // 3. Parse time slot into IST start and end Date objects
+    // 2. Parse time slot into IST start and end Date objects
     const parsedSlot = parseTimeSlot(rawDate.trim(), time.trim());
     if (!parsedSlot) {
       return res.status(400).json({ error: "Invalid time slot format. Example: '10:00 AM - 12:00 PM' or '14:00 - 16:00'" });
+    }
+
+    // 3. Validate booking startTime is strictly in the future (including same-day slots)
+    const now = new Date();
+    if (parsedSlot.startTime <= now) {
+      return res.status(400).json({ error: "Booking start time must be in the future." });
     }
 
     // 4. Verify target studio exists in PostgreSQL
@@ -146,43 +160,20 @@ async function updateStatus(req, res, next) {
       return res.status(400).json({ error: `Invalid booking status: ${status}. Must be one of: ${allowedStatuses.join(", ")}` });
     }
 
-    // 1. Fetch booking
-    const booking = await bookingService.getBookingById(id);
-    if (!booking) {
-      return res.status(404).json({ error: `Booking with id ${id} not found` });
-    }
-
-    // 2. Ownership check: verify caller is host of the booked studio
-    if (!booking.studio || booking.studio.providerId !== req.user.id) {
-      return res.status(403).json({ error: "Unauthorized: You do not own the studio for this booking." });
-    }
-
-    // 3. Lifecycle transition validation
-    const currentStatus = booking.status;
-
-    // Terminal statuses cannot transition further
-    if (["REJECTED", "CANCELLED", "COMPLETED"].includes(currentStatus)) {
-      return res.status(400).json({ error: `Cannot change status of a ${currentStatus} booking.` });
-    }
-
-    // From PENDING: can only go to CONFIRMED or REJECTED
-    if (currentStatus === "PENDING" && !["CONFIRMED", "REJECTED"].includes(targetStatus)) {
-      return res.status(400).json({ error: "Pending bookings can only be CONFIRMED or REJECTED." });
-    }
-
-    // From CONFIRMED: can only go to COMPLETED
-    if (currentStatus === "CONFIRMED" && targetStatus !== "COMPLETED") {
-      return res.status(400).json({ error: "Confirmed bookings can only transition to COMPLETED." });
-    }
-
-    // 4. Update status in database
-    const updated = await bookingService.updateBookingStatus(id, targetStatus);
+    const updated = await bookingService.updateBookingStatusAtomic({
+      bookingId: id,
+      targetStatus: targetStatus,
+      providerId: req.user.id
+    });
 
     return res.status(200).json({
       success: true,
       booking: updated
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }
@@ -192,38 +183,20 @@ async function cancelBooking(req, res, next) {
   try {
     const { id } = req.params;
 
-    // 1. Fetch booking
-    const booking = await bookingService.getBookingById(id);
-    if (!booking) {
-      return res.status(404).json({ error: `Booking with id ${id} not found` });
-    }
-
-    // 2. Ownership check: verify caller is the creator who placed this booking
-    if (booking.creatorId !== req.user.id) {
-      return res.status(403).json({ error: "Unauthorized: You can only cancel your own bookings." });
-    }
-
-    // 3. Validation: already cancelled or completed
-    if (booking.status === "CANCELLED") {
-      return res.status(400).json({ error: "This booking has already been cancelled." });
-    }
-
-    if (booking.status === "COMPLETED") {
-      return res.status(400).json({ error: "Completed bookings cannot be cancelled." });
-    }
-
-    if (booking.status === "REJECTED") {
-      return res.status(400).json({ error: "Rejected bookings cannot be cancelled." });
-    }
-
-    // 4. Cancel booking
-    const updated = await bookingService.cancelBooking(id);
+    const updated = await bookingService.cancelBookingAtomic({
+      bookingId: id,
+      creatorId: req.user.id
+    });
 
     return res.status(200).json({
       success: true,
+      message: "Booking cancelled successfully. Payment will be refunded.",
       booking: updated
     });
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 }

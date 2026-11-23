@@ -40,7 +40,9 @@ function formatStudio(studio) {
 
 // Fetch studios matching optional filters
 async function getAllStudios(filters = {}) {
-  const where = {};
+  const where = {
+    isArchived: false
+  };
 
   if (filters.providerId && isValidUuid(filters.providerId)) {
     where.providerId = filters.providerId;
@@ -97,9 +99,10 @@ async function getStudioById(id) {
     return null;
   }
 
-  const studio = await prisma.studio.findUnique({
+  const studio = await prisma.studio.findFirst({
     where: {
-      id: id
+      id: id,
+      isArchived: false
     },
     include: {
       provider: {
@@ -191,24 +194,50 @@ async function hasActiveBookings(studioId) {
   return count > 0;
 }
 
-// Delete a studio from PostgreSQL (and any associated non-active booking history)
-async function deleteStudio(id) {
+// Delete a studio from PostgreSQL (soft-delete / archival, preserving historical booking records)
+async function deleteStudio(id, providerId) {
   return await prisma.$transaction(async (tx) => {
-    // Clean up any historical bookings for this studio to satisfy foreign key constraint
-    await tx.booking.deleteMany({
+    // 1. Acquire pessimistic row lock on the Studio to serialize concurrent reservation and deletion requests
+    const rows = await tx.$queryRaw`SELECT id, "providerId", "isArchived" FROM "Studio" WHERE id = ${id}::uuid FOR UPDATE`;
+    if (!rows || rows.length === 0 || rows[0].isArchived) {
+      const err = new Error(`Studio with id ${id} not found`);
+      err.status = 404;
+      throw err;
+    }
+
+    if (providerId && rows[0].providerId !== providerId) {
+      const err = new Error("Unauthorized: You can only delete your own studios.");
+      err.status = 403;
+      throw err;
+    }
+
+    // 2. Check for active or pending bookings inside the locked transaction
+    const activeCount = await tx.booking.count({
       where: {
-        studioId: id
+        studioId: id,
+        status: {
+          in: ["PENDING", "CONFIRMED"]
+        }
       }
     });
 
-    // Delete the studio record
-    await tx.studio.delete({
+    if (activeCount > 0) {
+      const err = new Error("A studio with active or scheduled bookings cannot be deleted.");
+      err.status = 400;
+      throw err;
+    }
+
+    // 3. Mark studio as archived, preserving all historical booking records intact
+    const updated = await tx.studio.update({
       where: {
         id: id
+      },
+      data: {
+        isArchived: true
       }
     });
 
-    return true;
+    return formatStudio(updated);
   });
 }
 
