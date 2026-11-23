@@ -8,10 +8,10 @@
 
 <br/>
 
-[![GitHub Stars](https://img.shields.io/github/stars/AdityaGupta-2006/PodSphere?style=for-the-badge&logo=github&color=8B5CF6)](https://github.com/AdityaGupta-2006/PodSphere/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/AdityaGupta-2006/PodSphere?style=for-the-badge&logo=github&color=6366F1)](https://github.com/AdityaGupta-2006/PodSphere/forks)
+[![GitHub Stars](https://img.shields.io/github/stars/mukku2549/PodSphere?style=for-the-badge&logo=github&color=8B5CF6)](https://github.com/mukku2549/PodSphere/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/mukku2549/PodSphere?style=for-the-badge&logo=github&color=6366F1)](https://github.com/mukku2549/PodSphere/forks)
 [![License](https://img.shields.io/badge/License-Academic-EC4899?style=for-the-badge)](#-license)
-[![Status](https://img.shields.io/badge/Status-In%20Development-F59E0B?style=for-the-badge)](#-roadmap)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-22C55E?style=for-the-badge)](#-roadmap)
 
 <br/>
 
@@ -57,7 +57,7 @@ Creators can discover listed studios and reserve recording slots, while studio p
 
 Developed as a **Semester 3 college project**, PodSphere focuses on building a functional, intuitive full-stack web application with clean separation between Creator and Provider workflows.
 
-> **Project Status Notice:** The frontend user interface is fully interactive and functional in standalone client mode using local storage. The backend REST APIs, JWT middleware, and PostgreSQL database integration are currently under active development.
+> **Project Status Notice:** The frontend user interface is fully interactive and functional in standalone client mode using local storage. The backend REST API (Express + Prisma + PostgreSQL) is now implemented with authentication, studio CRUD, booking management, JWT middleware, role-based authorization, rate limiting, and a full unit test suite.
 
 ---
 
@@ -236,8 +236,8 @@ Creator selects studio, date & time slot
 * [x] **Client-Side Provider Activation:** Creators can activate provider tools directly in the UI without a separate registration.
 * [x] **Action Safeguards:** Confirmation modal dialogs prevent accidental deletion of studio listings or cancellation of bookings.
 * [x] **Responsive Viewport & Scrolling:** Accessible custom scrollbars and modal containers preventing content clipping on small screens.
-* [ ] **Backend Conflict Enforcement (In Progress):** Database-level transaction checks to prevent concurrent duplicate bookings on the server.
-* [ ] **Backend Authorization Middleware (In Progress):** Server-side JWT token and role validation on Express API endpoints.
+* [x] **Backend Conflict Enforcement:** Database-level transaction checks prevent concurrent duplicate bookings via Prisma overlap query on `startTime`/`endTime`.
+* [x] **Backend Authorization Middleware:** Server-side JWT token and role validation on all protected Express API endpoints.
 
 ---
 
@@ -294,7 +294,7 @@ PodSphere follows a modular full-stack architecture:
 ### Frontend vs Backend Status
 
 * **Frontend (Implemented):** Built with React 19, Vite, React Router 7, and Tailwind CSS. All creator and provider views, modals, filters, and forms are fully interactive.
-* **Backend (In Progress):** The Express structure in `backend/src/` contains initial scaffolding (route stubs, controller skeletons, middleware stubs, and utility helpers). The business logic and database-connected endpoints are currently being developed.
+* **Backend (Implemented):** The Express structure in `backend/src/` contains a fully implemented REST API with JWT authentication, role-based authorization (PROVIDER/USER), Prisma-connected services for auth, studios and bookings, rate limiting, global error handling, and 44 passing unit tests.
 * **Dual-Mode Client:**
   * **Standalone Mode (`VITE_USE_API=false`):** Runs the frontend using browser local storage and pre-seeded mock studio/booking data. This allows complete UI testing without needing a running backend server or PostgreSQL database.
   * **API Mode (`VITE_USE_API=true`):** Configured to dispatch HTTP requests to the Express backend endpoints once backend implementation is completed.
@@ -458,7 +458,7 @@ Follow these steps to set up and run PodSphere on your local machine.
 ### 1️⃣ Clone the Repository
 
 ```bash
-git clone https://github.com/AdityaGupta-2006/PodSphere.git
+git clone https://github.com/mukku2549/PodSphere.git
 cd PodSphere
 ```
 
@@ -562,7 +562,43 @@ npm run build
 
 ### Backend Verification
 
-Automated test suites (`npm test`) are not yet configured for the backend (currently returns `Error: no test specified`). End-to-end integration and API test scripts are planned for Phase 07.
+Run unit tests and check coverage in the `backend` directory:
+
+```bash
+cd backend
+
+# Run all unit tests (44 tests across 5 suites)
+npm test
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+> **Test Results:** 44 passing tests covering `AppError`, `asyncHandler`, `jwt`, `time` utilities, and `validate` middleware. Zero failures.
+
+---
+
+## 🔌 API Endpoints
+
+The backend REST API is mounted at `/api`. All protected routes require an `Authorization: Bearer <token>` header.
+
+| Method | Endpoint | Auth | Role | Description |
+| :----- | :------- | :--- | :--- | :---------- |
+| `POST` | `/api/auth/register` | ❌ | — | Register a new user account |
+| `POST` | `/api/auth/login` | ❌ | — | Login and receive a JWT |
+| `GET` | `/api/auth/me` | ✅ | Any | Get the current user's profile |
+| `GET` | `/api/studios` | ❌ | — | List studios (`?city`, `?search`, `?maxPrice`) |
+| `GET` | `/api/studios/:id` | ❌ | — | Get a single studio by ID |
+| `POST` | `/api/studios` | ✅ | PROVIDER | Create a new studio listing |
+| `PUT` | `/api/studios/:id` | ✅ | PROVIDER | Update an owned studio |
+| `DELETE` | `/api/studios/:id` | ✅ | PROVIDER | Delete an owned studio (no active bookings) |
+| `GET` | `/api/bookings` | ✅ | Any | List bookings (scoped to role) |
+| `GET` | `/api/bookings/:id` | ✅ | Any | Get a single booking |
+| `POST` | `/api/bookings` | ✅ | USER | Create a new booking (conflict-checked) |
+| `PATCH` | `/api/bookings/:id/cancel` | ✅ | USER | Cancel own booking |
+| `PATCH` | `/api/bookings/:id/status` | ✅ | PROVIDER | Update booking status |
+| `GET` | `/api/provider/studios` | ✅ | PROVIDER | Get provider's own studios |
+| `GET` | `/api/provider/bookings` | ✅ | PROVIDER | Get bookings for provider's studios |
 
 ---
 
@@ -598,7 +634,7 @@ Booking System & Conflict Prevention
 ├── Provider booking status actions (Frontend UI: ✅)
 └── Backend database conflict enforcement (Backend: 🚧)
 
-PHASE 05 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 🚧
+PHASE 05 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✅
 Backend API Implementation
 ├── Express REST API routes & controllers
 ├── JWT authentication & authorization middleware
