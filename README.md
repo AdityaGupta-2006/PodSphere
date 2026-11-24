@@ -666,7 +666,7 @@ Testing & Final Delivery
 | Member | Responsibility |
 | :--- | :--- |
 | **Aditya Kumar Gupta** | Full-Stack Development |
-| **Aniket Kumar** | Frontend / UI |
+| **Aniket Kumar** | Full-Stack Development |
 | **Anik Kumar Deo** | Backend / Database |
 | **Muskan Praveen** | Research / Documentation |
 
