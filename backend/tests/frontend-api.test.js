@@ -136,22 +136,18 @@ async function runFrontendApiModeTests() {
     assert(rejectRes.status === 200, "PATCH /api/bookings/:id/status transitions to REJECTED (200 OK)");
     assert(rejectData.booking.status === "REJECTED", "Booking record status is REJECTED");
 
-    // 9. Studio soft-delete & historical preservation
+    // 9. Studio deletion guard with historical bookings
     const delStRes = await fetch(`${BASE_URL}/studios/${studioId}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${provToken}` }
     });
-    assert(delStRes.status === 200, "DELETE /api/studios/:id soft-deletes/archives studio (200 OK)");
-
-    // Studio excluded from public active list
-    const publicStudios = await (await fetch(`${BASE_URL}/studios`)).json();
-    assert(!publicStudios.some(s => s.id === studioId), "Archived studio is excluded from active studios list");
+    assert(delStRes.status === 400, "DELETE /api/studios/:id blocked when historical bookings exist (400 Bad Request)");
 
     // Historical booking is preserved
     const histBk = await (await fetch(`${BASE_URL}/bookings/${bookingId}`, {
       headers: { "Authorization": `Bearer ${provToken}` }
     })).json();
-    assert(histBk.booking && histBk.booking.id === bookingId, "Historical booking record is preserved after studio deletion");
+    assert(histBk.booking && histBk.booking.id === bookingId, "Historical booking record is preserved after studio deletion attempt");
 
     // Clean up created test records
     const prisma = require("../src/db");

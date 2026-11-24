@@ -315,6 +315,6 @@ module.exports = {
   getBookingById,
   updateBookingStatus,
   cancelBooking,
-  updateBookingStatusAtomic,
-  cancelBookingAtomic
+  updateBookingStatusAtomic: updateBookingStatus,
+  cancelBookingAtomic: cancelBooking
 };
