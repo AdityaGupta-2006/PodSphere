@@ -1,7 +1,18 @@
-// End-to-end test verifying Frontend API mode against the live backend server on port 5001
-const BASE_URL = "http://localhost:5001/api";
+// End-to-end test verifying Frontend API mode
+const app = require("../src/app");
 
 async function runFrontendApiModeTests() {
+  let server = null;
+  let BASE_URL = "http://localhost:5001/api";
+
+  try {
+    const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(1000) });
+    if (!res.ok) throw new Error("Health check failed");
+  } catch {
+    server = app.listen(0);
+    BASE_URL = `http://127.0.0.1:${server.address().port}/api`;
+  }
+
   console.log("\n======================================================");
   console.log(" Running Frontend API Mode Verification Tests");
   console.log(` Target Server: ${BASE_URL}`);
@@ -136,12 +147,12 @@ async function runFrontendApiModeTests() {
     assert(rejectRes.status === 200, "PATCH /api/bookings/:id/status transitions to REJECTED (200 OK)");
     assert(rejectData.booking.status === "REJECTED", "Booking record status is REJECTED");
 
-    // 9. Studio deletion & historical booking preservation
+    // 9. Studio deletion guard with historical bookings
     const delStRes = await fetch(`${BASE_URL}/studios/${studioId}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${provToken}` }
     });
-    assert(delStRes.status === 400, "DELETE /api/studios/:id blocked when booking history exists (400 Bad Request)");
+    assert(delStRes.status === 400, "DELETE /api/studios/:id blocked when historical bookings exist (400 Bad Request)");
 
     // Historical booking is preserved
     const histBk = await (await fetch(`${BASE_URL}/bookings/${bookingId}`, {
@@ -182,6 +193,8 @@ async function runFrontendApiModeTests() {
   } catch (err) {
     console.error("Test error:", err);
     failed++;
+  } finally {
+    if (server) server.close();
   }
 
   console.log(`\n======================================================`);
