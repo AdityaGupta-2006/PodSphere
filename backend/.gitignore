@@ -30,7 +30,10 @@ prisma/*.db-journal
 *.db-journal
 
 # Temporary & Test Coverage
+.windsurf/
 coverage/
+.agents/
+.claude/
 .temp/
 .tmp/
 tmp/
