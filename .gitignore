@@ -1,28 +1,67 @@
 # Dependencies
 node_modules/
+*/node_modules/
 
-# Environment variables
+# Environment variables & secrets
 .env
+.env.*
 .env.local
 .env.*.local
+!.env.example
+!*/.env.example
 
-# Build output
+# Production build outputs
 dist/
+dist-ssr/
 build/
+out/
+*/dist/
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# OS files
+# OS & Desktop artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# IDE
+# IDE & Editor files
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*~
 
-# Prisma
-prisma/dev.db
-prisma/dev.db-journal
+# Testing & Coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Prisma generated & Local DB files
+prisma/*.db
+prisma/*.db-journal
+*.db
+*.db-journal
+/generated/
+backend/generated/
+
+# Caches & Temporary
+.eslintcache
+.cache/
+.temp/
+.tmp/
+tmp/

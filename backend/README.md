@@ -71,7 +71,7 @@ Create a `.env` file inside the `backend/` directory based on `.env.example`:
 PORT=5001
 CLIENT_URL="http://localhost:5174"
 DATABASE_URL="postgresql://username:password@localhost:5432/podsphere"
-JWT_SECRET="podsphere_jwt_super_secret_key_2026"
+JWT_SECRET="your_jwt_secret_key_here"
 ```
 
 | Variable | Description | Default / Example |
@@ -390,6 +390,111 @@ All requests and responses use `Content-Type: application/json`. Protected endpo
 - **Description**: Cancels a pending or confirmed reservation.
 - **Success Response** (`200 OK`): Returns `{ success: true, booking }` with `status: "CANCELLED"`.
 - **Errors**: `400 Bad Request` (booking already cancelled or completed), `403 Forbidden` (non-owner).
+
+---
+
+### 5. Equipment Marketplace
+
+#### `GET /api/equipment`
+- **Access**: Public
+- **Query Parameters**:
+  - `category` (optional): Filter by category (e.g. `Microphones`, `Cameras`, `Lighting`, `Mixers`)
+  - `city` (optional): Filter by city (e.g. `Delhi`, `Mumbai`, `Bengaluru`)
+  - `search` (optional): Substring match across name, brand, model, description
+  - `minPrice` / `maxPrice` (optional): Price range filters
+  - `pricingUnit` (optional): `HOURLY` or `DAILY`
+  - `condition` (optional): `NEW`, `LIKE_NEW`, `GOOD`, `FAIR`
+- **Success Response** (`200 OK`): Array of equipment listing objects.
+
+#### `GET /api/equipment/:id`
+- **Access**: Public
+- **Success Response** (`200 OK`): Returns `{ equipment }`.
+- **Errors**: `404 Not Found`.
+
+#### `POST /api/equipment`
+- **Access**: Authenticated Provider (`role === "PROVIDER"`)
+- **Body**:
+  ```json
+  {
+    "name": "Shure SM7B Vocal Microphone",
+    "category": "Microphones",
+    "brand": "Shure",
+    "model": "SM7B",
+    "description": "Studio vocal microphone with broadcast arm and windscreen.",
+    "condition": "LIKE_NEW",
+    "city": "Delhi",
+    "address": "Connaught Place Studio Hub",
+    "hourlyRate": 150,
+    "dailyRate": 900,
+    "pricingUnit": "HOURLY",
+    "minimumRentalHours": 2,
+    "maximumRentalHours": 48,
+    "totalQuantity": 2,
+    "imageUrls": ["https://..."]
+  }
+  ```
+- **Success Response** (`201 Created`): Returns `{ message, equipment }`.
+- **Errors**: `400 Bad Request` (validation errors), `403 Forbidden` (non-provider).
+
+#### `PUT /api/equipment/:id`
+- **Access**: Authenticated Equipment Owner
+- **Success Response** (`200 OK`): Returns `{ message, equipment }`.
+- **Errors**: `403 Forbidden` (not equipment owner), `404 Not Found`.
+
+#### `DELETE /api/equipment/:id`
+- **Access**: Authenticated Equipment Owner
+- **Description**: Deletes or safely archives equipment. If active/pending rentals exist, returns `400 Bad Request`. If historical completed/cancelled rentals exist, archives the listing (`isArchived: true`) so audit and financial history are preserved.
+- **Success Response** (`200 OK`): Returns `{ message, archived, id }`.
+
+#### `GET /api/equipment/provider` (also `/api/provider/equipment`)
+- **Access**: Authenticated Provider
+- **Description**: Returns all equipment listings owned by the authenticated provider.
+
+---
+
+### 6. Equipment Rentals System
+
+#### `POST /api/rentals`
+- **Access**: Authenticated Creator
+- **Description**: Requests an equipment rental with pessimistic row-locking (`SELECT ... FOR UPDATE` on `Equipment`), interval overlap check (`existing.startTime < requested.endTime AND existing.endTime > requested.startTime`), and multi-unit inventory reservation tracking. If requested quantity exceeds remaining unreserved inventory for that interval, returns `409 Conflict`.
+- **Body**:
+  ```json
+  {
+    "equipmentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "startTime": "2026-11-25T10:00:00.000Z",
+    "endTime": "2026-11-25T14:00:00.000Z",
+    "quantity": 1,
+    "notes": "Need XLR cables"
+  }
+  ```
+- **Success Response** (`201 Created`): Returns `{ message, rental }` with calculated `billableUnits`, `rentalRate`, `totalAmount`, and initial `status: "PENDING"`.
+- **Errors**: `400 Bad Request` (past date, provider renting own gear, min/max hours violated), `409 Conflict` (inventory unavailable).
+
+#### `GET /api/rentals`
+- **Access**: Authenticated (role-aware: returns creator rentals for creators, incoming gear rentals for providers).
+
+#### `GET /api/rentals/creator`
+- **Access**: Authenticated Creator. Returns creator's personal gear rental bookings.
+
+#### `GET /api/rentals/provider` (also `/api/provider/rentals`)
+- **Access**: Authenticated Provider. Returns incoming rental requests for the provider's gear.
+
+#### `GET /api/rentals/:id`
+- **Access**: Authenticated (creator of the rental or gear host). Returns `{ rental }`.
+
+#### `PATCH /api/rentals/:id/status`
+- **Access**: Authenticated Gear Provider
+- **Description**: Atomically transitions rental status using row-level locking (`SELECT ... FOR UPDATE` on `EquipmentRental`).
+- **Allowed Transitions**:
+  - `PENDING` -> `APPROVED` or `REJECTED`
+  - `APPROVED` -> `ACTIVE` (gear picked up) or `CANCELLED`
+  - `ACTIVE` -> `RETURNED` or `COMPLETED`
+  - `RETURNED` -> `COMPLETED`
+- **Errors**: `400 Bad Request` (invalid lifecycle transition or modifying terminal state), `403 Forbidden` (non-owner), `409 Conflict` (status contention).
+
+#### `PATCH /api/rentals/:id/cancel`
+- **Access**: Authenticated Creator
+- **Description**: Cancels a pending or approved rental prior to pickup. Returns `{ message, rental }` with `status: "CANCELLED"`.
 
 ---
 

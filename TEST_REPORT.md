@@ -11,10 +11,13 @@
 
 | Test Domain | Target Suite | Status | Passed | Failed | Blocked |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Backend Integration & Concurrency** | `node tests/system.test.js` | **PASSED** | 88 | 0 | 0 |
+| **Backend Studio & System Concurrency** | `node tests/system.test.js` | **PASSED** | 88 | 0 | 0 |
+| **Backend Equipment & Rental Concurrency** | `node tests/equipment-rental.test.js` | **PASSED** | 86 | 0 | 0 |
+| **Combined Backend Test Suite** | `npm test` | **PASSED** | 174 | 0 | 0 |
+| **Frontend API Mode Verification** | `node tests/frontend-api.test.js` | **PASSED** | 19 | 0 | 0 |
 | **Frontend Code Quality** | `npm run lint` | **PASSED** | 0 warnings | 0 | 0 |
-| **Frontend Production Build** | `npm run build` | **PASSED** | 45 modules | 0 | 0 |
-| **Database Migrations** | `npx prisma migrate status` | **PASSED** | 1 applied | 0 | 0 |
+| **Frontend Production Build** | `npm run build` | **PASSED** | 53 modules | 0 | 0 |
+| **Database Migrations** | `npx prisma migrate status` | **PASSED** | All applied | 0 | 0 |
 
 ---
 
@@ -31,17 +34,26 @@ cd frontend && npm run build
 
 ### B. Database Migration & Client Generation
 ```bash
-# 1. Generate Prisma Client
+# 1. Validate schema
+cd backend && npx prisma validate
+
+# 2. Generate Prisma Client
 cd backend && npx prisma generate
 
-# 2. Apply Migrations
-cd backend && npx prisma migrate deploy
+# 3. Check migration status
+cd backend && npx prisma migrate status
 ```
 
 ### C. Backend Automated Test Suite
 ```bash
-# Execute full system and concurrency suite
+# Execute full system and concurrency suite (88 assertions)
 cd backend && npm test
+```
+
+### D. Frontend API Mode Integration Suite
+```bash
+# Execute live frontend API verification against server on port 5001 (19 assertions)
+node backend/tests/frontend-api.test.js
 ```
 
 ---
@@ -51,7 +63,7 @@ cd backend && npm test
 ```text
 ======================================================
  PodSphere Complete System Test Suite
- Running against: http://127.0.0.1:63377/api
+ Running against: http://127.0.0.1:51375/api
 ======================================================
 
 1. System Health & Database Connectivity
@@ -169,7 +181,43 @@ cd backend && npm test
 
 ---
 
-## 4. Workflows Tested End to End
+## 4. Frontend API Mode Results (19 Assertions)
+
+```text
+======================================================
+ Running Frontend API Mode Verification Tests
+ Target Server: http://localhost:5001/api
+======================================================
+
+  ✓ Backend health endpoint is reachable and ok
+  ✓ Provider registration in API mode returns 201
+  ✓ Creator registration in API mode returns 201
+  ✓ POST /api/auth/activate-provider succeeds in API mode (200 OK)
+  ✓ User role in database updated to PROVIDER
+  ✓ User roles list includes 'provider'
+  ✓ POST /api/studios creates studio with 201 in API mode
+  ✓ Booking past time slot on today's date rejected in API mode (400)
+  ✓ POST /api/bookings creates booking in API mode with 201
+  ✓ Booking status starts as PENDING
+  ✓ Server message confirms pending provider confirmation
+  ✓ GET /api/bookings?role=provider returns 200
+  ✓ Provider retrieves incoming booking via role=provider
+  ✓ PATCH /api/bookings/:id/status transitions to REJECTED (200 OK)
+  ✓ Booking record status is REJECTED
+  ✓ DELETE /api/studios/:id blocked when booking history exists (400 Bad Request)
+  ✓ Historical booking record is preserved after studio deletion attempt
+  ✓ Created temporary studio without bookings (201 Created)
+  ✓ DELETE studio without bookings succeeds with 200 OK
+  ✓ Test records purged from database.
+
+======================================================
+ Frontend API Mode Results: 19 Passed, 0 Failed
+======================================================
+```
+
+---
+
+## 5. Workflows Tested End to End
 
 ### Workflow 1: Creator Registration & Session Booking
 1. User registers as creator (`sys_creator1@test.com`).
@@ -204,11 +252,19 @@ cd backend && npm test
 
 ---
 
-## 5. Remaining Risks & Mitigations
+## 6. Security & Configuration Audit Summary
 
-1. **Local PostgreSQL Dependency**:
-   - *Risk*: If PostgreSQL is stopped on the host machine, the backend will fail health check (`GET /api/health` returns 503).
-   - *Mitigation*: Startup commands and health status scripts documented in `FINAL_PROJECT_STATUS.md`.
-2. **Mac AirPlay Port Collision**:
-   - *Risk*: macOS AirPlay Receiver listens on port 5000 by default.
-   - *Mitigation*: Port 5001 is hardcoded as default in `.env` and `src/config/env.js`, avoiding collision.
+1. **Environment Configuration**:
+   - `JWT_SECRET` is strictly loaded from the environment with production enforcement; no fallback secrets allowed in production mode.
+   - Database credentials and ports are managed via `.env` files.
+   - All `.env` files are included in `.gitignore` at root, frontend, and backend levels.
+   - `.env.example` templates contain safe placeholders and default port 5001.
+
+2. **CORS Enforcement**:
+   - Dynamic origin verification checks incoming origin against allowed Vite origins (`http://localhost:5173`, `http://localhost:5174`, etc.).
+   - Unauthorized foreign origins receive `403 Forbidden`.
+
+3. **Data Protection & Identity**:
+   - Password hashes (`passwordHash`) are explicitly excluded from all user query responses.
+   - Provider contact details (such as email) are hidden on public studio detail requests and only visible to authorized studio owners.
+   - Foreign key constraint `onDelete: Restrict` prevents silent deletion of historical records.

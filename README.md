@@ -100,12 +100,14 @@ Creators looking for recording spaces and studio owners managing facilities face
 Features available to podcast creators:
 
 * **Authentication & Profiles:** Registration and login interfaces with client-side session persistence.
-* **Creator Dashboard:** Overview of upcoming sessions and quick navigation links.
+* **Creator Dashboard:** Overview of upcoming studio sessions, active gear rentals, and quick navigation links.
 * **Studio Discovery:** Search studios by name, city, price range, and equipment tags.
 * **Studio Details Modal:** Modal showing capacity, hourly rates, location, and equipment lists.
 * **Booking Creation:** Interactive date selection and hourly time-slot picker with client-side availability checks.
 * **Personal Bookings:** Booking history view with filter tabs (*Pending*, *Confirmed*, *Cancelled*, *Completed*).
 * **Booking Cancellation:** Ability to cancel upcoming reservations with confirmation safeguards.
+* **Equipment Marketplace:** Browse and filter professional podcast recording gear (microphones, audio interfaces, cameras, lighting) with real-time rate calculators.
+* **Equipment Rentals Management:** View, track, and cancel gear rentals across lifecycle states (*Pending*, *Approved*, *Active*, *Returned*, *Completed*).
 * **Workspace Switcher:** Instant switching between Creator and Provider views from the same session.
 
 </td>
@@ -114,17 +116,22 @@ Features available to podcast creators:
 
 ### 🏢 Provider Workspace
 
-Tools for studio providers to manage facilities and bookings:
+Tools for studio providers to manage facilities, gear, and bookings:
 
-* **Provider Dashboard:** Overview of listed studios, active requests, and studio status cards.
+* **Provider Dashboard:** Overview of listed studios, gear inventory, active requests, and studio status cards.
 * **Provider Onboarding:** In-app access activation allowing creators to access provider tools without creating a separate account.
 * **Studio Management (CRUD):**
   * Create new studio listings with pricing, address, description, and gear tags.
   * Edit existing studio details and update specifications.
-  * Delete listings with confirmation safety dialogs.
-* **Incoming Booking Management:** Review requests with creator names, dates, and time slots.
+  * Delete listings with confirmation safety dialogs (archived when booking history exists).
+* **Equipment Inventory Management (CRUD):**
+  * List gear with hourly or daily pricing, condition tags, specs, and multi-unit quantities.
+  * Update rental rates, minimum/maximum rental hours, and stock availability.
+  * Delete or archive gear listings while protecting historical rental records.
+* **Incoming Booking Management:** Review studio requests with creator names, dates, and time slots.
+* **Incoming Equipment Rental Management:** Review, approve, reject, mark active (picked up), returned, or completed for gear rental requests.
 * **Status Controls:** Actions to confirm, reject, or mark sessions completed in the UI.
-* **Schedule Oversight:** Visual indicators of confirmed and pending studio sessions.
+* **Schedule Oversight:** Visual indicators of confirmed and pending studio sessions and equipment bookings.
 
 </td>
 </tr>
@@ -353,13 +360,18 @@ The database schema is defined in [schema.prisma](backend/prisma/schema.prisma) 
 | Model | Fields | Purpose |
 | :--- | :--- | :--- |
 | `User` | `id`, `name`, `email`, `passwordHash`, `role`, `createdAt`, `updatedAt` | Stores user account credentials and primary database role. |
-| `Studio` | `id`, `providerId`, `name`, `description`, `city`, `address`, `hourlyRate`, `gear`, `createdAt`, `updatedAt` | Represents recording studios listed by providers, including hourly rates and equipment. |
+| `Studio` | `id`, `providerId`, `name`, `description`, `city`, `address`, `hourlyRate`, `gear`, `isArchived`, `createdAt`, `updatedAt` | Represents recording studios listed by providers, including hourly rates and equipment. |
 | `Booking` | `id`, `creatorId`, `studioId`, `startTime`, `endTime`, `totalAmount`, `status`, `createdAt`, `updatedAt` | Stores studio reservations linking creators and studios with date ranges. |
+| `Equipment` | `id`, `providerId`, `name`, `category`, `brand`, `model`, `description`, `condition`, `city`, `address`, `hourlyRate`, `dailyRate`, `pricingUnit`, `minimumRentalHours`, `maximumRentalHours`, `totalQuantity`, `imageUrls`, `isActive`, `isArchived`, `createdAt`, `updatedAt` | Represents gear and hardware catalog items listed for rent with multi-unit stock and hourly/daily pricing. |
+| `EquipmentRental` | `id`, `equipmentId`, `creatorId`, `providerId`, `startTime`, `endTime`, `quantity`, `rentalRate`, `pricingUnit`, `duration`, `totalAmount`, `status`, `notes`, `createdAt`, `updatedAt` | Stores equipment rental bookings with interval concurrency checks, multi-unit availability tracking, and lifecycle status transitions. |
 
 ### Schema Enums
 
 * `Role`: `USER`, `PROVIDER`
-* `BookingStatus`: `CONFIRMED`, `CANCELLED`, `COMPLETED`
+* `BookingStatus`: `PENDING`, `CONFIRMED`, `REJECTED`, `CANCELLED`, `COMPLETED`
+* `EquipmentCondition`: `NEW`, `LIKE_NEW`, `GOOD`, `FAIR`
+* `RentalPricingUnit`: `HOURLY`, `DAILY`
+* `EquipmentRentalStatus`: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`, `ACTIVE`, `RETURNED`, `COMPLETED`
 
 ### Database Role vs Frontend Workspace
 
@@ -522,7 +534,7 @@ Create a `.env` file in the `backend` directory:
 PORT=5001
 CLIENT_URL="http://localhost:5174"
 DATABASE_URL="postgresql://username:password@localhost:5432/podsphere"
-JWT_SECRET="podsphere_jwt_super_secret_key_2026"
+JWT_SECRET="your_jwt_secret_key_here"
 ```
 
 ---

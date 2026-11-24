@@ -16,8 +16,11 @@ model User {
   passwordHash String
   role         Role
 
-  studios  Studio[]
-  bookings Booking[]
+  studios                   Studio[]
+  bookings                  Booking[]
+  equipment                 Equipment[]
+  rentalsAsCreator          EquipmentRental[] @relation("CreatorEquipmentRentals")
+  rentalsAsProvider         EquipmentRental[] @relation("ProviderEquipmentRentals")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -65,6 +68,69 @@ model Booking {
   @@index([studioId, startTime, endTime])
 }
 
+model Equipment {
+  id                 String             @id @default(uuid()) @db.Uuid
+  providerId         String             @db.Uuid
+  name               String
+  description        String
+  category           String
+  brand              String
+  model              String
+  condition          EquipmentCondition @default(GOOD)
+  specifications     String[]           @default([])
+  city               String
+  address            String
+  hourlyRate         Decimal?           @db.Decimal(10, 2)
+  dailyRate          Decimal?           @db.Decimal(10, 2)
+  pricingUnit        RentalPricingUnit  @default(HOURLY)
+  minimumRentalHours Int                @default(1)
+  maximumRentalHours Int?
+  totalQuantity      Int                @default(1)
+  imageUrls          String[]           @default([])
+  isActive           Boolean            @default(true)
+  isArchived         Boolean            @default(false)
+
+  provider User              @relation(fields: [providerId], references: [id])
+  rentals  EquipmentRental[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId])
+  @@index([category])
+  @@index([city])
+  @@index([isActive, isArchived])
+}
+
+model EquipmentRental {
+  id          String                @id @default(uuid()) @db.Uuid
+  equipmentId String                @db.Uuid
+  creatorId   String                @db.Uuid
+  providerId  String                @db.Uuid
+  startTime   DateTime
+  endTime     DateTime
+  quantity    Int                   @default(1)
+  rentalRate  Decimal               @db.Decimal(10, 2)
+  pricingUnit RentalPricingUnit     @default(HOURLY)
+  duration    Decimal               @db.Decimal(10, 2)
+  totalAmount Decimal               @db.Decimal(10, 2)
+  status      EquipmentRentalStatus @default(PENDING)
+  notes       String?
+
+  equipment Equipment @relation(fields: [equipmentId], references: [id], onDelete: Restrict)
+  creator   User      @relation("CreatorEquipmentRentals", fields: [creatorId], references: [id], onDelete: Restrict)
+  provider  User      @relation("ProviderEquipmentRentals", fields: [providerId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([equipmentId])
+  @@index([creatorId])
+  @@index([providerId])
+  @@index([status])
+  @@index([equipmentId, startTime, endTime])
+}
+
 enum Role {
   USER
   PROVIDER
@@ -75,5 +141,27 @@ enum BookingStatus {
   CONFIRMED
   REJECTED
   CANCELLED
+  COMPLETED
+}
+
+enum EquipmentCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum RentalPricingUnit {
+  HOURLY
+  DAILY
+}
+
+enum EquipmentRentalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  ACTIVE
+  RETURNED
   COMPLETED
 }

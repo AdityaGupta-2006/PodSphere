@@ -54,7 +54,7 @@ async function createBooking(req, res, next) {
     }
 
     // 4. Reject past start times (including same-day past slots)
-    if (parsedSlot.startTime < now) {
+    if (parsedSlot.startTime <= now) {
       return res.status(400).json({ error: "Cannot book a time slot in the past." });
     }
 

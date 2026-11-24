@@ -136,22 +136,40 @@ async function runFrontendApiModeTests() {
     assert(rejectRes.status === 200, "PATCH /api/bookings/:id/status transitions to REJECTED (200 OK)");
     assert(rejectData.booking.status === "REJECTED", "Booking record status is REJECTED");
 
-    // 9. Studio soft-delete & historical preservation
+    // 9. Studio deletion & historical booking preservation
     const delStRes = await fetch(`${BASE_URL}/studios/${studioId}`, {
       method: "DELETE",
       headers: { "Authorization": `Bearer ${provToken}` }
     });
-    assert(delStRes.status === 200, "DELETE /api/studios/:id soft-deletes/archives studio (200 OK)");
-
-    // Studio excluded from public active list
-    const publicStudios = await (await fetch(`${BASE_URL}/studios`)).json();
-    assert(!publicStudios.some(s => s.id === studioId), "Archived studio is excluded from active studios list");
+    assert(delStRes.status === 400, "DELETE /api/studios/:id blocked when booking history exists (400 Bad Request)");
 
     // Historical booking is preserved
     const histBk = await (await fetch(`${BASE_URL}/bookings/${bookingId}`, {
       headers: { "Authorization": `Bearer ${provToken}` }
     })).json();
-    assert(histBk.booking && histBk.booking.id === bookingId, "Historical booking record is preserved after studio deletion");
+    assert(histBk.booking && histBk.booking.id === bookingId, "Historical booking record is preserved after studio deletion attempt");
+
+    // Create and delete an unbooked studio cleanly (200 OK)
+    const st2Res = await fetch(`${BASE_URL}/studios`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${provToken}` },
+      body: JSON.stringify({
+        name: "Temporary Studio Without Bookings",
+        description: "Studio to test clean deletion",
+        city: "Mumbai",
+        address: "100 Marine Drive",
+        hourlyRate: 2000,
+        gear: ["SM7B"]
+      })
+    });
+    const st2Data = await st2Res.json();
+    assert(st2Res.status === 201, "Created temporary studio without bookings (201 Created)");
+
+    const delSt2Res = await fetch(`${BASE_URL}/studios/${st2Data.studio.id}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${provToken}` }
+    });
+    assert(delSt2Res.status === 200, "DELETE studio without bookings succeeds with 200 OK");
 
     // Clean up created test records
     const prisma = require("../src/db");

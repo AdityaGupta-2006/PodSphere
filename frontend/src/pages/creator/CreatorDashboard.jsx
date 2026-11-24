@@ -147,11 +147,18 @@ function CreatorDashboard() {
             <div>
               <h3 className="font-body-sm font-semibold text-on-surface">What you can do in Creator Workspace:</h3>
               <p className="font-caption text-caption text-outline mt-0.5">
-                1. Browse certified podcast studios by city and hourly rate. 2. Lock recording sessions with pro audio gear. 3. Manage your active sessions in My Bookings.
+                1. Browse certified podcast studios by city. 2. Rent pro microphones, cameras &amp; mixers. 3. Manage your active studio sessions &amp; gear rentals.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Link
+              to="/creator/equipment"
+              className="text-xs text-primary hover:underline flex items-center gap-1 font-medium mr-2"
+            >
+              <span>Browse Equipment</span>
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
             <Link
               to="/creator/bookings"
               className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"

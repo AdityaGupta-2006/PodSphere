@@ -22,7 +22,22 @@
 - **Data Protection**: Public listings protect provider privacy by redacting owner email addresses.
 - **History Preservation**: Studios with booking history cannot be deleted, preserving audit and session records.
 
-### C. Booking Engine & Lifecycle Management
+### C. Equipment Marketplace & Rental Engine
+- **Gear Discovery & Filtering**: Search and filter recording hardware (microphones, mixers, cinema cameras, LED fixtures) by category, city, search keywords, condition, and maximum price.
+- **Provider Equipment Management**: Full CRUD operations for providers to list hardware with hourly or daily pricing, minimum/maximum rental hours, specifications, and total inventory quantities.
+- **Server-Side Rental Pricing**: Accurate calculation of billable rental units (hours or 24-hour days) and total price.
+- **Pessimistic Inventory Locking & Concurrency Protection**: Interactive transaction with `SELECT ... FOR UPDATE` on `Equipment` serializes concurrent rental requests, computes overlapping interval reservations (`existing.startTime < requested.endTime AND existing.endTime > requested.startTime`), and rejects requests exceeding available stock with `HTTP 409 Conflict`.
+- **Atomic Rental Status Transitions**: Row-level locking on `EquipmentRental` safely guards lifecycle updates:
+  - `PENDING` -> Initial submission state.
+  - `APPROVED` -> Provider approves reservation.
+  - `ACTIVE` -> Gear picked up by creator.
+  - `RETURNED` -> Gear returned to provider.
+  - `COMPLETED` -> Provider completes and closes rental record.
+  - `REJECTED` -> Provider rejects rental request with optional reason.
+  - `CANCELLED` -> Creator cancels pending/approved rental before pickup.
+- **Data Protection & Archival**: Equipment with historical completed/cancelled rentals is safely archived (`isArchived: true`) rather than deleted, protecting audit trails.
+
+### D. Booking Engine & Lifecycle Management
 - **Strict Booking Validation**: Rejects past dates, same-day past time slots, nonexistent calendar dates (e.g. Feb 31), and malformed time ranges.
 - **Concurrency & Double-Booking Prevention**: Pessimistic row locking (`SELECT id FROM "Studio" ... FOR UPDATE`) prevents simultaneous duplicate reservations.
 - **Atomic Booking Status Transitions**: Pessimistic row locking (`SELECT id, status FROM "Booking" ... FOR UPDATE`) guarantees race-condition safe status updates and cancellations with `HTTP 409 Conflict` on contention.
@@ -69,7 +84,7 @@ npm run seed
 PORT=5001
 CLIENT_URL="http://localhost:5174"
 DATABASE_URL="postgresql://adityakumargupta@localhost:5432/podsphere"
-JWT_SECRET="podsphere_jwt_super_secret_key_2026"
+JWT_SECRET="your_jwt_secret_key_here"
 ```
 
 ### Frontend `.env` (`frontend/.env`)

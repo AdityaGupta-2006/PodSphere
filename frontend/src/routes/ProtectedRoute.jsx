@@ -96,12 +96,6 @@ function ProtectedRoute({ children, allowedRoles }) {
               </div>
             </div>
 
-            {activationError && (
-              <div className="w-full mb-space-md p-3 rounded-xl bg-error-container/20 border border-error-container text-error font-body-sm text-left">
-                {activationError}
-              </div>
-            )}
-
             <div className="flex flex-col sm:flex-row items-center gap-space-sm w-full sm:w-auto">
               <button
                 type="button"

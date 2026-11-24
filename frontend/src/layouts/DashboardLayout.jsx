@@ -28,10 +28,16 @@ function DashboardLayout({ children, activePath }) {
   }, []);
 
   const isActive = (path) => {
-    if (path === "/provider/studios" && (currentPath === "/provider/studios" || currentPath.endsWith("/edit"))) {
+    if (path === "/provider/studios" && (currentPath === "/provider/studios" || currentPath.startsWith("/provider/studios/"))) {
+      return true;
+    }
+    if (path === "/provider/equipment" && (currentPath === "/provider/equipment" || currentPath.startsWith("/provider/equipment/"))) {
       return true;
     }
     if (path === "/creator/studios" && (currentPath.startsWith("/creator/studios") || currentPath.startsWith("/studios"))) {
+      return true;
+    }
+    if (path === "/creator/equipment" && (currentPath.startsWith("/creator/equipment") || currentPath.startsWith("/equipment"))) {
       return true;
     }
     return currentPath === path;
@@ -66,9 +72,14 @@ function DashboardLayout({ children, activePath }) {
 
   const getPageTitle = () => {
     if (currentPath.includes("/studios/new")) return "Create Studio";
-    if (currentPath.includes("/edit")) return "Edit Studio";
+    if (currentPath.includes("/studios/") && currentPath.includes("/edit")) return "Edit Studio";
+    if (currentPath.includes("/equipment/new")) return "List Equipment";
+    if (currentPath.includes("/equipment/") && currentPath.includes("/edit")) return "Edit Equipment";
+    if (currentPath.includes("/equipment/")) return "Equipment Details";
     if (currentPath.includes("/studios")) return isProviderWorkspace ? "My Studios" : "Browse Studios";
-    if (currentPath.includes("/bookings")) return isProviderWorkspace ? "Provider Bookings" : "My Bookings";
+    if (currentPath.includes("/equipment")) return isProviderWorkspace ? "My Equipment" : "Browse Equipment";
+    if (currentPath.includes("/rentals")) return isProviderWorkspace ? "Equipment Rentals" : "My Rentals";
+    if (currentPath.includes("/bookings")) return isProviderWorkspace ? "Studio Bookings" : "My Bookings";
     if (currentPath.includes("/dashboard")) return "Dashboard";
     return "Console";
   };
@@ -95,7 +106,7 @@ function DashboardLayout({ children, activePath }) {
                   PodSphere
                 </span>
                 <span className="font-label-sm text-[10px] text-outline tracking-wider uppercase mt-0.5">
-                  Studio Network
+                  Studio &amp; Gear Network
                 </span>
               </div>
             </Link>
@@ -119,7 +130,7 @@ function DashboardLayout({ children, activePath }) {
                   isProviderWorkspace ? "bg-tertiary/20 text-tertiary" : "bg-primary-container/20 text-primary"
                 }`}>
                   <span className="material-symbols-outlined text-[17px]">
-                    {isProviderWorkspace ? "meeting_room" : "mic"}
+                    {isProviderWorkspace ? "store" : "mic"}
                   </span>
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -160,9 +171,8 @@ function DashboardLayout({ children, activePath }) {
                     )}
                   </div>
                   <ul className="text-[11px] text-outline pl-5 list-disc space-y-0.5">
-                    <li>Creator Dashboard</li>
-                    <li>Browse Studios</li>
-                    <li>My Bookings</li>
+                    <li>Browse Studios &amp; Bookings</li>
+                    <li>Browse &amp; Rent Equipment</li>
                   </ul>
                 </button>
 
@@ -177,7 +187,7 @@ function DashboardLayout({ children, activePath }) {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-label-sm text-xs font-semibold text-on-surface">
-                      <span className="material-symbols-outlined text-[16px] text-tertiary">meeting_room</span>
+                      <span className="material-symbols-outlined text-[16px] text-tertiary">store</span>
                       <span>PROVIDER CONSOLE</span>
                     </div>
                     {isProviderWorkspace ? (
@@ -189,9 +199,8 @@ function DashboardLayout({ children, activePath }) {
                     ) : null}
                   </div>
                   <ul className="text-[11px] text-outline pl-5 list-disc space-y-0.5">
-                    <li>Provider Dashboard</li>
-                    <li>My Studios</li>
-                    <li>Provider Bookings</li>
+                    <li>Manage Studios &amp; Bookings</li>
+                    <li>Manage Equipment &amp; Rentals</li>
                   </ul>
                 </button>
               </div>
@@ -223,12 +232,28 @@ function DashboardLayout({ children, activePath }) {
                     <span className="font-body-sm text-body-sm">My Studios</span>
                   </Link>
                   <Link
+                    to="/provider/equipment"
+                    className={navLinkClass("/provider/equipment")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                    <span className="font-body-sm text-body-sm">My Equipment</span>
+                  </Link>
+                  <Link
                     to="/provider/bookings"
                     className={navLinkClass("/provider/bookings")}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined text-[18px]">calendar_today</span>
-                    <span className="font-body-sm text-body-sm">Bookings</span>
+                    <span className="font-body-sm text-body-sm">Studio Bookings</span>
+                  </Link>
+                  <Link
+                    to="/provider/rentals"
+                    className={navLinkClass("/provider/rentals")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">handshake</span>
+                    <span className="font-body-sm text-body-sm">Equipment Rentals</span>
                   </Link>
                 </nav>
 
@@ -270,12 +295,28 @@ function DashboardLayout({ children, activePath }) {
                     <span className="font-body-sm text-body-sm">Browse Studios</span>
                   </Link>
                   <Link
+                    to="/creator/equipment"
+                    className={navLinkClass("/creator/equipment")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">videocam</span>
+                    <span className="font-body-sm text-body-sm">Browse Equipment</span>
+                  </Link>
+                  <Link
                     to="/creator/bookings"
                     className={navLinkClass("/creator/bookings")}
                     onClick={() => setMobileMenuOpen(false)}
                   >
                     <span className="material-symbols-outlined text-[18px]">event_available</span>
                     <span className="font-body-sm text-body-sm">My Bookings</span>
+                  </Link>
+                  <Link
+                    to="/creator/rentals"
+                    className={navLinkClass("/creator/rentals")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
+                    <span className="font-body-sm text-body-sm">My Rentals</span>
                   </Link>
                 </nav>
 
@@ -286,7 +327,7 @@ function DashboardLayout({ children, activePath }) {
                     className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-surface-container/50 hover:bg-surface-container text-xs text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
                   >
                     <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[15px] text-tertiary">meeting_room</span>
+                      <span className="material-symbols-outlined text-[15px] text-tertiary">store</span>
                       <span>Switch to Provider Console</span>
                     </span>
                     <span className="material-symbols-outlined text-[14px]">arrow_forward</span>

@@ -151,11 +151,18 @@ function ProviderDashboard() {
             <div>
               <h3 className="font-body-sm font-semibold text-on-surface">What you can do in Provider Console:</h3>
               <p className="font-caption text-caption text-outline mt-0.5">
-                1. Add your studio spaces with rates &amp; equipment gear rosters. 2. Edit room specs anytime. 3. Confirm upcoming booking requests from creators.
+                1. List studio spaces and audio/video gear. 2. Edit rates and specs anytime. 3. Confirm upcoming studio sessions and equipment rental requests.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <Link
+              to="/provider/equipment/new"
+              className="text-xs text-tertiary hover:underline flex items-center gap-1 font-medium"
+            >
+              <span>List Gear</span>
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
             <Link
               to="/provider/studios/new"
               className="text-xs text-tertiary hover:underline flex items-center gap-1 font-medium"
@@ -391,7 +398,7 @@ function ProviderDashboard() {
           <h2 className="font-headline-sm text-headline-sm font-semibold text-on-surface mb-space-md">
             Quick Actions
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
             <Link
               className="bg-surface-container-low hover:bg-surface-container p-space-md rounded-xl transition-colors flex flex-col justify-between border border-surface-container-high"
               to="/provider/studios/new"
@@ -411,17 +418,17 @@ function ProviderDashboard() {
 
             <Link
               className="bg-surface-container-low hover:bg-surface-container p-space-md rounded-xl transition-colors flex flex-col justify-between border border-surface-container-high"
-              to="/provider/studios"
+              to="/provider/equipment/new"
             >
               <div>
-                <div className="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface-variant mb-3">
-                  <span className="material-symbols-outlined text-[20px]">meeting_room</span>
+                <div className="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-tertiary mb-3">
+                  <span className="material-symbols-outlined text-[20px]">inventory_2</span>
                 </div>
                 <h3 className="font-headline-sm text-body-lg font-semibold text-on-surface mb-1">
-                  Manage Studios
+                  List Equipment
                 </h3>
                 <p className="font-caption text-caption text-outline">
-                  Update rates, edit descriptions, and adjust equipment specs.
+                  Rent out microphones, cameras, mixers, and audio accessories.
                 </p>
               </div>
             </Link>
@@ -435,10 +442,27 @@ function ProviderDashboard() {
                   <span className="material-symbols-outlined text-[20px]">calendar_today</span>
                 </div>
                 <h3 className="font-headline-sm text-body-lg font-semibold text-on-surface mb-1">
-                  View Bookings
+                  Studio Bookings
                 </h3>
                 <p className="font-caption text-caption text-outline">
-                  Review upcoming bookings and confirm new reservation requests.
+                  Review upcoming studio session reservations.
+                </p>
+              </div>
+            </Link>
+
+            <Link
+              className="bg-surface-container-low hover:bg-surface-container p-space-md rounded-xl transition-colors flex flex-col justify-between border border-surface-container-high"
+              to="/provider/rentals"
+            >
+              <div>
+                <div className="w-10 h-10 rounded-lg bg-surface-container-lowest flex items-center justify-center text-on-surface-variant mb-3">
+                  <span className="material-symbols-outlined text-[20px]">handshake</span>
+                </div>
+                <h3 className="font-headline-sm text-body-lg font-semibold text-on-surface mb-1">
+                  Gear Rentals
+                </h3>
+                <p className="font-caption text-caption text-outline">
+                  Review and confirm equipment requests from creators.
                 </p>
               </div>
             </Link>
